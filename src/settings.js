@@ -1,0 +1,61 @@
+import { TTS_PROVIDERS } from './core/tts/providers.js';
+import { ASR_LANGUAGES, MAX_PROFILES, cleanProfile } from './core/asr/providers.js';
+
+// Keys live in Obsidian's SecretStorage, never in data.json. IDs: lowercase letters, digits and dashes.
+export const ttsSecretId = provider => `qiaomu-audio-tts-${String(provider).toLowerCase()}`;
+export const asrSecretId = (profileId, provider = '') => `qiaomu-audio-asr-${String(profileId).toLowerCase()}${provider ? `-${String(provider).toLowerCase()}` : ''}`;
+
+// The old profile-only key belongs exclusively to the provider saved with that profile.
+export function migrateAsrSecrets(app, profiles) {
+  for (const profile of profiles) {
+    const old = asrSecretId(profile.id), next = asrSecretId(profile.id, profile.provider);
+    const value = getSecret(app, old);
+    if (!value) continue;
+    try {
+      if (!getSecret(app, next)) setSecret(app, next, value);
+      setSecret(app, old, '');
+    } catch { /* Preserve the old key if the host cannot save the migration. */ }
+  }
+}
+export const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
+export function defaultSettings(desktop = true) {
+  return {
+    tts: { provider: desktop ? 'edge' : 'system', profiles: {}, rate: 1, welcomed: false },
+    // engine: '' (not chosen yet), 'local' (SenseVoice on this computer) or 'cloud:<profile id>'.
+    asr: { engine: '', profiles: [], language: 'auto', mode: 'batch', keepAudio: false },
+  };
+}
+export function normalizeSettings(raw, desktop = true) {
+  const base = defaultSettings(desktop), value = raw && typeof raw === 'object' ? raw : {};
+  const tts = { ...base.tts, ...(value.tts && typeof value.tts === 'object' ? value.tts : {}) };
+  if (!TTS_PROVIDERS[tts.provider]) tts.provider = base.tts.provider;
+  if (!tts.profiles || typeof tts.profiles !== 'object' || Array.isArray(tts.profiles)) tts.profiles = {};
+  for (const id of Object.keys(tts.profiles)) if (!TTS_PROVIDERS[id] || typeof tts.profiles[id] !== 'object') delete tts.profiles[id];
+  tts.rate = RATES.includes(Number(tts.rate)) ? Number(tts.rate) : 1;
+  tts.welcomed = tts.welcomed === true;
+
+  const source = value.asr && typeof value.asr === 'object' ? value.asr : {};
+  const taken = new Set();
+  const profiles = (Array.isArray(source.profiles) ? source.profiles : []).slice(0, MAX_PROFILES)
+    .map(p => cleanProfile(p, taken)).filter(Boolean);
+  let engine = typeof source.engine === 'string' ? source.engine : '';
+  if (engine === 'local' && !desktop) engine = '';
+  if (engine.startsWith('cloud:') && !profiles.some(p => `cloud:${p.id}` === engine)) engine = profiles[0] ? `cloud:${profiles[0].id}` : '';
+  if (engine && engine !== 'local' && !engine.startsWith('cloud:')) engine = '';
+  return {
+    tts,
+    asr: {
+      engine, profiles,
+      language: ASR_LANGUAGES.includes(source.language) ? source.language : 'auto',
+      mode: source.mode === 'live' ? 'live' : 'batch',
+      keepAudio: source.keepAudio === true,
+    },
+  };
+}
+export function getSecret(app, id) {
+  try { return app.secretStorage?.getSecret(id) || ''; } catch { return ''; }
+}
+export function setSecret(app, id, value) {
+  app.secretStorage.setSecret(id, String(value || '').trim());
+}
