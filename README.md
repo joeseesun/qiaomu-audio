@@ -2,12 +2,12 @@
 
 Read any Obsidian note aloud with one click, and dictate speech straight into your notes.
 
-[中文说明](README_ZH.md) · [Releases](https://github.com/joeseesun/qiaomu-audio/releases) · [Help and feedback](https://github.com/joeseesun/qiaomu-audio/issues)
+[Official directory](https://community.obsidian.md/plugins/qiaomu-audio) · [中文说明](README_ZH.md) · [Releases](https://github.com/joeseesun/qiaomu-audio/releases) · [Help and feedback](https://github.com/joeseesun/qiaomu-audio/issues)
 
 ## Read aloud
 
 - Use the speaker button in any Markdown note. Read selected text, start at the cursor, or start from the visible text in reading view.
-- Pause, resume, move between sentences, change speed and choose a voice in a compact playback bar. The current sentence is highlighted. Manual scrolling pauses page following until you choose to return.
+- Pause, resume, move between sentences, change speed and choose a voice in a compact playback bar. The current sentence is highlighted in the editor; reading view follows the relevant text. Manual scrolling pauses page following until you choose to return.
 - Frontmatter, code blocks, formulas, comments, embedded media and raw URLs are skipped. Links read their visible text.
 - Choose system speech, Mac speech, Edge TTS, offline Kokoro/MeloTTS, OpenAI and compatible services, Qwen, Doubao, MiniMax, SiliconFlow, ElevenLabs or Azure.
 - Import saved reading settings and keys from Qiaomu Reader. Matching downloaded model data is reused.
@@ -39,7 +39,9 @@ Voice tests send a short sample sentence. Recognition tests send one second of g
 
 ## Install
 
-Use the [latest release](https://github.com/joeseesun/qiaomu-audio/releases/latest). For manual installation, put `main.js`, `manifest.json` and `styles.css` in `<vault>/.obsidian/plugins/qiaomu-audio/`, then enable Qiaomu Audio in Community plugins. The [community directory entry](https://community.obsidian.md/plugins/qiaomu-audio) is the official listing when its review and indexing are complete.
+Open the [official directory entry](https://community.obsidian.md/plugins/qiaomu-audio) and choose **Add to Obsidian**, or search **Qiaomu Audio** in Community plugins once the client catalog includes it. Version 1.0.1 has completed its automated official review and its listing is public; the last recorded client-catalog check is in the [release evidence](docs/release-evidence-1.0.1.md).
+
+For manual installation, use the [latest release](https://github.com/joeseesun/qiaomu-audio/releases/latest), put `main.js`, `manifest.json` and `styles.css` in `<vault>/.obsidian/plugins/qiaomu-audio/`, then enable Qiaomu Audio in Community plugins.
 
 Mobile uses system speech and cloud services; Edge, Mac speech and managed local models are desktop features. The minimum Obsidian version is 1.11.4. Windows/Linux automated checks do not prove native device playback; mobile device playback and microphone acceptance have not yet been verified.
 

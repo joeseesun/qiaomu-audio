@@ -4,10 +4,16 @@
 
 Read any Obsidian note aloud with one click, and dictate speech straight into your notes.
 
+[官方目录](https://community.obsidian.md/plugins/qiaomu-audio) · [下载发布版](https://github.com/joeseesun/qiaomu-audio/releases/latest) · [反馈问题](https://github.com/joeseesun/qiaomu-audio/issues)
+
+## 安装
+
+1.0.1 已完成官方自动扫描并公开目录网页。客户端索引同步后，可在第三方插件中搜索 **Qiaomu Audio**，或在官方页面点击 **Add to Obsidian**；当前索引验收结果见[发布记录](docs/release-evidence-1.0.1.md)。手动安装时，把发布页的 `main.js`、`manifest.json` 和 `styles.css` 放进 `<笔记库>/.obsidian/plugins/qiaomu-audio/`，然后启用插件。
+
 ## 朗读
 
 - 每篇笔记右上角有 🔊 按钮：有选中文字就读选中部分，否则从光标处读（阅读视图从当前屏幕开始）。
-- 底部出现播放条：播放/暂停、上一句/下一句、倍速、音色。正在读的句子会高亮，页面会跟着滚动；手动滚动后会出现「回到朗读处」。
+- 底部出现播放条：播放/暂停、上一句/下一句、倍速、音色。编辑模式中正在读的句子会高亮；阅读视图会跟随对应文字滚动。手动滚动后会出现「回到朗读处」。
 - 会跳过属性区、代码块、公式、注释、嵌入和网址；链接只读显示文字。
 - 语音服务：Edge（默认，无需密钥，仅桌面端）、系统语音、Mac 本机语音、本机模型（Kokoro / MeloTTS，离线）、OpenAI 及兼容接口、通义千问、豆包、MiniMax、硅基流动、ElevenLabs、Azure。
 - 已在乔木 Reader 里配置过朗读，可以在设置里一键导入（含密钥）；Reader 已下载的本机模型会直接复用。
