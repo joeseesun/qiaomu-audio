@@ -1,6 +1,22 @@
 // Chinese and English are reviewed. Other Obsidian languages fall back to English.
 // Each entry is [zh, en]; placeholders are named, e.g. {status}. scripts/check-i18n.mjs checks parity.
 export const STRINGS = {
+  'settings.cancel': ['取消', 'Cancel'],
+  "asr.addTitle": ["添加转写服务", "Add transcription service"],
+  "asr.addHelp": ["选择服务并填写必要配置，确认后才会添加并使用。连接可在添加后测试。", "Choose a service and enter its required settings. Confirm to add and use it, then test the connection."],
+  "asr.chooseProvider": ["请选择服务", "Choose a service"],
+  "asr.addConfirm": ["添加并使用", "Add and use"],
+  "asr.alreadyAdded": ["该配置已存在，已切换到已有服务。", "This configuration already exists. Switched to the existing service."],
+  "asr.profileLimit": ["最多可保存 12 个服务，请先删除不再使用的配置。", "Up to 12 services can be saved. Remove an unused configuration first."],
+
+  'tts.voiceSearch': ['搜索音色', 'Search voices'],
+  'tts.voicePicker': ['选择与试听音色', 'Choose and preview voices'],
+  'tts.noVoices': ['没有匹配的音色', 'No matching voices'],
+  'tts.customVoice': ['填写音色 ID', 'Enter a voice ID'],
+  'tts.unavailableVoice': ['已保存，但此设备尚未找到', 'Saved, but unavailable on this device'],
+  'tts.macSystemHelp': ['此列表来自浏览器，增强音色请选「Mac 系统语音」。', 'This browser list may omit enhanced voices. Choose Mac system speech to access them.'],
+  'settings.importRss': ['从 Qiaomu AI RSS 导入朗读设置', 'Import speech settings from Qiaomu AI RSS'],
+  'settings.importRssDesc': ['复制服务、声音和密钥；此后两个插件的设置独立保存。', 'Copy service, voice and keys once; each plugin then saves its own preferences.'],
   // Commands and entry points
   'cmd.read': ['朗读当前笔记', 'Read current note aloud'],
   'cmd.readStart': ['从头朗读当前笔记', 'Read current note from the start'],
@@ -37,11 +53,11 @@ export const STRINGS = {
   'status.reading': ['朗读中', 'Reading'], 'status.paused': ['朗读已暂停', 'Reading paused'],
 
   // TTS services (labels)
-  'tts.provider.system': ['系统语音', 'System voice'], 'tts.provider.macos': ['Mac 本机语音', 'Mac local speech'],
+  'tts.provider.system': ['系统语音', 'System voice'], 'tts.provider.macos': ['Mac 系统语音', 'Mac system speech'],
   'tts.provider.localModel': ['本机模型', 'Local model'], 'tts.provider.doubao': ['豆包语音', 'Doubao'],
   'tts.provider.siliconflow': ['硅基流动', 'SiliconFlow'], 'tts.provider.qwen': ['通义千问 TTS', 'Qwen TTS'],
   'tts.help.system': ['使用设备自带的语音；部分系统音色需要联网。', 'Uses device voices; some system voices need a network connection.'],
-  'tts.help.macos': ['调用这台 Mac 上已安装的音色，无需密钥。下载新声音后点「更新音色列表」。', 'Uses voices installed on this Mac, no key needed. After downloading new voices, refresh the list.'],
+  'tts.help.macos': ['调用这台 Mac 上已安装的音色，无需密钥。自动读取已安装的增强音色；下载新声音后可更新列表。', 'Uses voices installed on this Mac, no key needed. After downloading new voices, refresh the list.'],
   'tts.help.localModel': ['在这台电脑上合成，无需密钥；首次使用需下载一次模型。', 'Synthesis stays on this computer with no key. The model downloads once.'],
   'tts.help.edge': ['免费在线语音，需要联网；仅桌面端可用。朗读文字会发送至微软。', 'Free online speech that needs a network connection; desktop only. Text is sent to Microsoft.'],
   'tts.help.cloud': ['在线合成：朗读文字会发送到所选服务；付费服务按用量计费。', 'Online synthesis sends the text to the chosen service. Paid services bill by usage.'],

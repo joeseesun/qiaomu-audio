@@ -1,8 +1,8 @@
 import { SpeechCache, checkTtsSignal, ttsError } from './providers.js';
 
 export class TtsController {
-  constructor({ synthesize, makeAudio, speech, makeUtterance, onChange = () => {} }) {
-    Object.assign(this, { synthesize, makeAudio, speech, makeUtterance, onChange });
+  constructor({ synthesize, makeAudio, speech, makeUtterance, onChange = () => {}, beforePlay = () => {} }) {
+    Object.assign(this, { synthesize, makeAudio, speech, makeUtterance, onChange, beforePlay });
     this.cache = new SpeechCache(); this.pending = new Map(); this.generation = 0;
     this.state = 'idle'; this.index = 0; this.rate = 1; this.items = [];
   }
@@ -19,6 +19,7 @@ export class TtsController {
     this.state = 'idle'; this.error = null; this.paused = false; this.deferred = false; this.waitingSection = false; this.preparingSegment = false; this.emit();
   }
   start(owner, items, profile, { nextSection, index = 0, rate = 1, paused = false } = {}) {
+    if (!paused) this.beforePlay();
     this.stop(); this.owner = owner; this.items = items; this.profile = { ...profile };
     this.nextSection = nextSection; this.index = Math.max(0, Math.min(index, items.length - 1));
     this.rate = Math.min(2, Math.max(0.5, rate));
@@ -117,7 +118,17 @@ export class TtsController {
     }
     await this.playCurrent(generation);
   }
+  pause({ releaseSystem = false } = {}) {
+    if (!['playing', 'loading'].includes(this.state)) return;
+    this.paused = true; this.audio?.pause();
+    if (this.utteranceStarted) {
+      if (releaseSystem) { this.releasePlayer(); this.deferred = true; }
+      else this.speech?.pause();
+    }
+    this.state = 'paused'; this.emit();
+  }
   toggle() {
+    if (this.paused || this.state === 'error' || this.state === 'ended') this.beforePlay();
     if (this.waitingSection) {
       this.waitingSection = false; this.paused = false; this.owner.follow = true; this.index--;
       void this.advance(this.generation); return;
@@ -136,6 +147,7 @@ export class TtsController {
     this.emit();
   }
   retry() {
+    this.beforePlay();
     ++this.generation; this.abort?.abort(); this.pending.clear(); this.abort = new AbortController();
     this.paused = false; this.deferred = false; this.waitingSection = false; this.index = Math.min(this.index, Math.max(0, this.items.length - 1));
     void this.playCurrent(this.generation);

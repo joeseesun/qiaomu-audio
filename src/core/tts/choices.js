@@ -30,13 +30,14 @@ export function modelKey(profile) { return profile.id === 'doubao' ? 'resourceId
 export function voiceChoices(profile, catalog = {}) {
   const { id, model, resourceId } = profile;
   let voices = [];
+  const known = TTS_MODELS[id]?.some(entry => entry.id === model);
   if (id === 'edge' || id === 'azure') voices = microsoft;
-  if (id === 'openai') voices = entries(/^tts-1/.test(model) ? ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] : ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse', 'marin', 'cedar']);
-  if (id === 'qwen') voices = entries(['Cherry', 'Serena', 'Ethan', 'Chelsie']);
+  if (id === 'openai' && known) voices = entries(/^tts-1/.test(model) ? ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] : ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse', 'marin', 'cedar']);
+  if (id === 'qwen' && known) voices = entries(['Cherry', 'Serena', 'Ethan', 'Chelsie']);
   if (id === 'doubao') voices = resourceId === 'seed-tts-2.0' ? doubao2 : resourceId === 'seed-tts-1.0' ? doubao1 : [];
   if (id === 'siliconflow' && /(?:CosyVoice2-0\.5B|MOSS-TTSD-v0\.5)$/.test(model)) voices = silicon.map(v => ({ ...v, id: `${model}:${v.id}` }));
-  if (id === 'minimax') voices = entries([['male-qn-qingse', '青涩青年'], ['Chinese (Mandarin)_Reliable_Executive', '沉稳高管'], ['Chinese (Mandarin)_News_Anchor', '新闻女声']]);
-  if (id === 'elevenlabs') voices = entries([['JBFqnCBsd6RMkjVDRZzb', 'George']]);
+  if (id === 'minimax' && known) voices = entries([['male-qn-qingse', '青涩青年'], ['Chinese (Mandarin)_Reliable_Executive', '沉稳高管'], ['Chinese (Mandarin)_News_Anchor', '新闻女声']]);
+  if (id === 'elevenlabs' && known) voices = entries([['JBFqnCBsd6RMkjVDRZzb', 'George']]);
   return uniqueChoices([...voices, ...(catalog.voices || []).filter(v => !v.model || v.model === model)]);
 }
 export function uniqueChoices(values) {

@@ -1,6 +1,6 @@
 {
   "name": "qiaomu-audio",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "在任意 Obsidian 笔记里一键朗读，按一下说话自动转成文字。",
   "main": "main.js",
   "type": "module",
@@ -36,5 +36,19 @@
   },
   "allowScripts": {
     "esbuild@0.28.1": true
+  },
+  "exports": {
+    "./speech": {
+      "types": "./src/shared.d.ts",
+      "default": "./src/shared.js"
+    },
+    "./speech/text": {
+      "types": "./src/shared.d.ts",
+      "default": "./src/core/tts/text.js"
+    },
+    "./speech/progress": {
+      "types": "./src/shared.d.ts",
+      "default": "./src/shared/progress.js"
+    }
   }
 }

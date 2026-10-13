@@ -2,9 +2,13 @@ import { Platform, requestUrl } from 'obsidian';
 import { TtsController } from './core/tts/controller.js';
 import { EdgeSpeechClient } from './core/tts/edge-client.js';
 import { buildSpeechRequest, checkTtsSignal, synthesizeHttp, ttsError, ttsProfile } from './core/tts/providers.js';
+import { voiceChoices, loadVoiceCatalog } from './core/tts/choices.js';
+import { macVoiceChoices } from './core/tts/mac-voices.js';
+import { localVoiceChoices } from './runtime/local.js';
 import { splitSpeechText } from './core/tts/text.js';
 import { normalizeLocalProfile } from './runtime/local.js';
 import { getSecret, ttsSecretId } from './settings.js';
+import { coordinateSpeech } from './shared/coordination.js';
 
 // One speech controller per plugin: only one thing reads aloud at a time.
 export class SpeechService {
@@ -14,7 +18,9 @@ export class SpeechService {
       const { synthesizeEdge } = await import('./core/tts/edge.js');
       checkTtsSignal(options.signal); return synthesizeEdge(text, voice, options);
     });
+    this.coordination = coordinateSpeech(plugin.app.workspace, () => this.controller?.pause({ releaseSystem: true }));
     this.controller = new TtsController({
+      beforePlay: () => this.coordination.claim(),
       makeAudio: () => new window.Audio(), speech: window.speechSynthesis,
       makeUtterance: text => new window.SpeechSynthesisUtterance(text),
       synthesize: async (profile, text, signal) => {
@@ -39,8 +45,41 @@ export class SpeechService {
     const settings = this.settings, id = settings.provider;
     let profile = ttsProfile(settings, id);
     if (id === 'localModel') profile = { ...profile, ...normalizeLocalProfile(profile) };
-    return { ...profile, key: getSecret(this.plugin.app, ttsSecretId(id)) };
+    return { ...profile, key: getSecret(this.plugin.app, ttsSecretId(id, this.plugin.manifest.id)) };
   }
+  choices(profile = this.profile(), { chinese = false, tx = key => key } = {}) {
+    if (profile.id === 'system') return [{ id: '', label: tx('automatic') }, ...(window.speechSynthesis?.getVoices?.() || []).map(v => ({ id: v.voiceURI, label: `${v.name} · ${v.lang}` }))];
+    if (profile.id === 'macos') return [{ id: '', label: tx('automatic') }, ...(this.plugin.voiceCatalogs?.macos?.voices || [])];
+    if (profile.id === 'localModel') return localVoiceChoices(profile.model, chinese);
+    return voiceChoices(profile, this.plugin.voiceCatalogs?.[profile.id] || {});
+  }
+  async loadChoices(profile, { signal, chinese = false, tx = key => key } = {}) {
+    if (profile.id === 'macos') {
+      if (!Platform.isDesktopApp || !Platform.isMacOS) throw ttsError('macPlatform');
+      const { macSpeechVoices } = await import('./core/tts/macos.js');
+      return { voices: macVoiceChoices(await macSpeechVoices(signal), tx, chinese) };
+    }
+    return loadVoiceCatalog(profile, { request: requestUrl, key: profile.key, signal });
+  }
+  // Preview keeps the exact reading owner and sentence. Returning restores a paused session.
+  startPreview(owner, text, profile = this.profile()) {
+    if (this.preview && this.preview.owner !== owner) this.stopPreview(this.preview.owner);
+    const c = this.controller;
+    if (!this.preview) {
+      const saved = c.owner && c.items.length && !['idle', 'ended'].includes(c.state) ? { owner: c.owner, items: c.items, index: c.index, rate: c.rate, nextSection: c.nextSection, makeAudio: c.makeAudio } : null;
+      c.pause({ releaseSystem: true }); this.preview = { owner, saved };
+    }
+    this.speak(owner, text, profile);
+  }
+  stopPreview(owner = this.preview?.owner) {
+    if (!owner) return;
+    if (!this.preview || this.preview.owner !== owner) { this.controller.stop(owner); return; }
+    const preview = this.preview; this.preview = null; const c = this.controller;
+    const canRestore = !c.owner || c.owner === owner;
+    c.stop(owner);
+    if (canRestore && preview.saved) { const saved = preview.saved; c.makeAudio = saved.makeAudio; c.start(saved.owner, saved.items, this.profile(), { ...saved, paused: true }); }
+  }
+  discardPreview(owner) { if (this.preview?.saved?.owner === owner) this.preview.saved = null; }
   // Long sentences for online voices; short clauses keep local synthesis responsive.
   chunking() { return this.settings.provider === 'localModel' ? { limit: 40, clauses: true } : { limit: 240, clauses: false }; }
   configurationError(profile = this.profile()) {
@@ -56,7 +95,7 @@ export class SpeechService {
     if (items.length) this.controller.start(owner, items, profile, { rate: this.settings.rate });
     return items.length;
   }
-  dispose() { this.controller.dispose(); this.listeners.clear(); }
+  dispose() { this.preview = null; this.coordination.dispose(); this.controller.dispose(); this.listeners.clear(); }
 }
 export function hiddenProvider(id, selected) {
   return id !== selected && ((['edge', 'localModel'].includes(id) && !Platform.isDesktopApp) || (id === 'macos' && (!Platform.isDesktopApp || !Platform.isMacOS)));

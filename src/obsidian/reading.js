@@ -1,4 +1,5 @@
 import { Menu, Notice } from 'obsidian';
+import { openVoicePicker, audioSpeechChoiceText } from './speech-choices.js';
 import { voiceChoices } from '../core/tts/choices.js';
 import { localVoiceChoices } from '../runtime/local.js';
 import { markdownChunks } from '../markdown/speech-source.js';
@@ -6,6 +7,7 @@ import { currentLanguage, errorText, t } from '../i18n.js';
 import { RATES } from '../settings.js';
 import { editorView, rangeVisible, showSpeechRange } from './editor-extension.js';
 import { iconButton } from './ui.js';
+import { speechFingerprint, rememberProgress, resumeOffset } from '../shared/progress.js';
 
 const BUSY = ['playing', 'loading'];
 
@@ -19,7 +21,7 @@ export class ReadingManager {
   }
   get controller() { return this.plugin.speech.controller; }
   isActive() { return !!this.session; }
-  isPlaying() { return !!this.session && BUSY.includes(this.controller.state); }
+  isPlaying() { return !!this.session && this.controller.owner === this.session.owner && BUSY.includes(this.controller.state); }
 
   start(view, mode = 'auto') {
     if (!view?.file || !view.editor) { new Notice(t('notice.noNote')); return; }
@@ -39,9 +41,12 @@ export class ReadingManager {
       const found = items.findIndex(item => item.end > offset);
       index = found > 0 ? found : 0;
     }
+    const fingerprint = speechFingerprint(source), progressKey = view.file.path;
+    const selection = editor.somethingSelected() && (mode === 'auto' || mode === 'selection');
+    if (!selection && mode === 'auto' && index === 0) { const offset = resumeOffset(this.plugin.settings.readingProgress, progressKey, fingerprint); const found = items.findIndex(item => item.end > offset); if (found >= 0) index = found; }
     if (!items.length) { new Notice(t('notice.emptyText')); return; }
     this.stop();
-    const session = this.session = { view, file: view.file, items, follow: true, error: null };
+    const session = this.session = { view, file: view.file, items, follow: true, error: null, fingerprint, progressKey, selection };
     const owner = session.owner = {
       view, follow: true,
       clearHighlight: () => showSpeechRange(view, null),
@@ -58,6 +63,10 @@ export class ReadingManager {
     if (session !== this.session) return;
     const { view } = session;
     if (view.file !== session.file || !view.containerEl.isConnected) { this.stop(); return; }
+    if (!session.selection) {
+      rememberProgress(this.plugin.settings.readingProgress, session.progressKey, session.fingerprint, item.start);
+      window.clearTimeout(this.progressTimer); this.progressTimer = window.setTimeout(() => { void this.plugin.saveSettings(); }, 700);
+    }
     showSpeechRange(view, { from: item.start, to: item.end });
     if (session.follow) this.reveal(session, item);
   }
@@ -100,13 +109,14 @@ export class ReadingManager {
     }
   }
   toggle() {
+    this.plugin.speech.stopPreview();
     const session = this.session; if (!session) return;
     if (session.error) { this.retry(); return; }
     if (this.controller.state === 'ended') { this.controller.index = 0; this.controller.retry(); return; }
     this.controller.toggle();
   }
   pause() { if (this.session && BUSY.includes(this.controller.state)) this.controller.toggle(); }
-  skip(delta) { if (this.session && !this.session.error) this.controller.skip(delta); }
+  skip(delta) { this.plugin.speech.stopPreview(); if (this.session && !this.session.error) this.controller.skip(delta); }
   retry() {
     const session = this.session; if (!session) return;
     const profile = this.plugin.speech.profile(), problem = this.plugin.speech.configurationError(profile);
@@ -128,7 +138,10 @@ export class ReadingManager {
   }
   stop() {
     const session = this.session; if (!session) return;
+    window.clearTimeout(this.progressTimer);
+    if (!session.selection) void this.plugin.saveSettings();
     this.session = null;
+    this.plugin.speech.discardPreview(session.owner); this.voicePicker?.close();
     this.controller.stop(session.owner);
     showSpeechRange(session.view, null);
     session.unwatch?.(); session.bar?.remove();
@@ -163,27 +176,9 @@ export class ReadingManager {
     ui.position = bar.createDiv({ cls: 'qaudio-sr', attr: { 'aria-live': 'off' } });
     this.render();
   }
-  voiceMenu(event) {
-    const plugin = this.plugin, speech = plugin.speech, profile = speech.profile(), id = profile.id, menu = new Menu();
-    let voices = [];
-    if (id === 'system') {
-      const lang = currentLanguage() === 'zh' ? /^zh/i : /^en/i;
-      voices = [{ id: '', label: t('tts.systemVoice') }, ...(window.speechSynthesis?.getVoices?.() || [])
-        .filter(v => lang.test(v.lang) || v.voiceURI === profile.voice).slice(0, 20).map(v => ({ id: v.voiceURI, label: `${v.name} · ${v.lang}` }))];
-    } else if (id === 'localModel') voices = localVoiceChoices(profile.model, currentLanguage() === 'zh');
-    else if (id === 'macos') voices = [{ id: '', label: t('tts.systemVoice') }, ...(plugin.macVoices || [])].slice(0, 25);
-    else voices = voiceChoices(profile, plugin.voiceCatalogs?.[id] || {}).slice(0, 25);
-    if (profile.voice && !voices.some(v => v.id === profile.voice)) voices.unshift({ id: profile.voice, label: profile.voice });
-    for (const voice of voices) {
-      menu.addItem(item => item.setTitle(voice.label).setChecked(voice.id === (profile.voice || '')).onClick(async () => {
-        const settings = speech.settings;
-        settings.profiles[id] = { ...settings.profiles[id], voice: voice.id };
-        await plugin.saveSettings(); this.restartWithSettings();
-      }));
-    }
-    menu.addSeparator();
-    menu.addItem(item => item.setTitle(t('player.moreVoices')).setIcon('settings').onClick(() => plugin.openSettings()));
-    menu.showAtMouseEvent(event);
+  voiceMenu() {
+    this.voicePicker?.close();
+    this.voicePicker = openVoicePicker(this.plugin, { onSettings: () => this.plugin.openSettings(), tx: audioSpeechChoiceText, chinese: currentLanguage() === 'zh', onChange: async () => { await this.plugin.saveSettings(); this.restartWithSettings(); }, errorText: error => errorText(error, this.plugin.speech.profile().id) });
   }
   speedMenu(event) {
     const speech = this.plugin.speech, menu = new Menu();
@@ -206,6 +201,7 @@ export class ReadingManager {
   }
   render() {
     const session = this.session, c = this.controller;
+    if (session && !session.selection && c.owner === session.owner && c.state === 'ended') { rememberProgress(this.plugin.settings.readingProgress, session.progressKey, session.fingerprint, 0, true); void this.plugin.saveSettings(); }
     const state = !session ? 'idle' : session.error ? 'error' : c.owner === session.owner ? c.state : 'idle';
     this.status.toggleClass('qaudio-hidden', !session);
     if (session) this.status.setText(`${state === 'playing' || state === 'loading' ? '▶' : '❚❚'} ${t(state === 'playing' || state === 'loading' ? 'status.reading' : 'status.paused')}`);

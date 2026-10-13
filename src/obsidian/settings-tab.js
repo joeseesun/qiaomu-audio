@@ -1,14 +1,16 @@
 import { Notice, Platform, PluginSettingTab, Setting, requestUrl, setIcon } from 'obsidian';
 import { TTS_PROVIDERS, ttsProfile } from '../core/tts/providers.js';
 import { cloudService } from '../core/cloud-services.js';
-import { TTS_MODELS, canLoadVoiceCatalog, changeSpeechModel, loadVoiceCatalog, modelKey, uniqueChoices, voiceChoices } from '../core/tts/choices.js';
-import { macVoiceChoices } from '../core/tts/mac-voices.js';
-import { ASR_LANGUAGES, ASR_PROVIDERS, MAX_PROFILES, PROTOCOLS, cloudConfig, isLocalUrl, newProfile, providerOf, withProvider } from '../core/asr/providers.js';
-import { LOCAL_ASR_MODEL, LOCAL_MODELS, localVoiceChoices, normalizeLocalProfile } from '../runtime/local.js';
+import { changeSpeechModel, modelKey, uniqueChoices } from '../core/tts/choices.js';
+import { ASR_LANGUAGES, ASR_PROVIDERS, MAX_PROFILES, PROTOCOLS, cloudConfig, isLocalUrl, providerOf, withProvider } from '../core/asr/providers.js';
+import { LOCAL_ASR_MODEL, normalizeLocalProfile } from '../runtime/local.js';
 import { currentLanguage, errorText, t } from '../i18n.js';
 import { asrSecretId, getSecret, setSecret, ttsSecretId } from '../settings.js';
 import { hiddenProvider, providerHelp, providerLabel } from '../speech.js';
+import { SpeechChoices, audioSpeechChoiceText } from './speech-choices.js';
+import { AsrServiceModal } from './asr-service-modal.js';
 import { LocalModelPanel } from './local-panel.js';
+import { findSpeechSettings, copySpeechSettings } from '../shared/configuration.js';
 
 const CUSTOM = '__custom__';
 const ADD = '__add__';
@@ -76,12 +78,12 @@ export class AudioSettingTab extends PluginSettingTab {
     setIcon(summary.createSpan({ cls: 'qaudio-icon qaudio-chevron', attr: { 'aria-hidden': 'true' } }), 'chevron-right');
     return details.createDiv('qaudio-card');
   }
-  hide() { this.cleanup(); }
+  hide() { this.asrModal?.close(); this.cleanup(); }
   cleanup() {
     this.unsubscribe?.(); this.unsubscribe = null;
     this.removeVoicesListener?.(); this.removeVoicesListener = null;
     this.asrTestAbort?.abort(); this.asrTestAbort = null;
-    this.plugin.speech.controller.stop(this.previewOwner);
+    this.plugin.speech.stopPreview(this.previewOwner);
     for (const panel of this.panels) panel.destroy(); this.panels = [];
   }
   async save() {
@@ -172,11 +174,12 @@ export class AudioSettingTab extends PluginSettingTab {
     let resetPreview = () => {};
     const host = this.section(body, t('settings.voiceSection'), t('settings.voiceSectionDesc'));
     const changed = async (render = true) => {
-      speech.controller.stop(this.previewOwner); speech.controller.cache.clear();
+      speech.stopPreview(this.previewOwner); speech.controller.cache.clear();
       await this.save(); plugin.reading.restartWithSettings();
       if (render) this.refresh();
     };
     const update = async (key, value) => {
+      if (['baseUrl', 'region'].includes(key)) delete plugin.voiceCatalogs[id];
       const current = ttsProfile(settings, id);
       let next = key === modelKey(current) && id !== 'localModel' ? changeSpeechModel(current, value, plugin.voiceCatalogs[id] || {}) : { ...current, [key]: value };
       if (id === 'localModel') next = normalizeLocalProfile(key === 'model' ? { ...next, voice: '' } : next);
@@ -193,7 +196,7 @@ export class AudioSettingTab extends PluginSettingTab {
     });
     service.setDesc(desc);
     if (!['system', 'macos', 'edge', 'localModel'].includes(id)) {
-      const key = this.secret(host, ttsSecretId(id), () => { void changed(false); resetPreview(); }, () => resetPreview());
+      const key = this.secret(host, ttsSecretId(id, plugin.manifest.id), () => { delete plugin.voiceCatalogs[id]; void changed(); resetPreview(); }, () => resetPreview());
       this.serviceLinks(key, 'tts', id);
     }
     if (id === 'azure') new Setting(host).setName(t('settings.region')).setDesc(t('settings.regionHelp')).addText(text => {
@@ -201,19 +204,7 @@ export class AudioSettingTab extends PluginSettingTab {
       text.inputEl.addEventListener('change', () => update('region', text.getValue().trim()));
     });
     if (id === 'compatible') this.urlField(host, profile, value => update('baseUrl', value));
-    const catalog = plugin.voiceCatalogs[id] || {};
-    if (TTS_MODELS[id]) this.choice(host, id === 'doubao' ? t('settings.resourceId') : t('settings.model'), [...TTS_MODELS[id], ...(catalog.models || [])], profile[modelKey(profile)], value => update(modelKey(profile), value));
-    if (id === 'localModel') this.choice(host, t('settings.model'), LOCAL_MODELS.map(m => ({ id: m.id, label: m.label })), profile.model, value => update('model', value), { custom: false });
-    const zh = currentLanguage() === 'zh';
-    const voices = id === 'system' ? [{ id: '', label: t('tts.systemVoice') }, ...(window.speechSynthesis?.getVoices?.() || []).map(v => ({ id: v.voiceURI, label: `${v.name} · ${v.lang}` }))]
-      : id === 'macos' ? [{ id: '', label: t('tts.systemVoice') }, ...(plugin.macVoices || [])]
-        : id === 'localModel' ? localVoiceChoices(profile.model, zh) : voiceChoices(profile, catalog);
-    this.choice(host, t('settings.voice'), voices, profile.voice || '', value => update('voice', value), { custom: !['system', 'localModel', 'macos'].includes(id) });
-    if (id === 'system' && !voices[1] && window.speechSynthesis?.addEventListener) {
-      const refresh = () => { if (body.isConnected) this.refresh(); };
-      window.speechSynthesis.addEventListener('voiceschanged', refresh, { once: true });
-      this.removeVoicesListener = () => window.speechSynthesis.removeEventListener('voiceschanged', refresh);
-    }
+    this.panels.push(new SpeechChoices(host.createDiv(), { host: plugin, tx: audioSpeechChoiceText, chinese: currentLanguage() === 'zh', onChange: key => changed(key !== 'voice'), errorText: error => errorText(error, id) }));
     if (id === 'localModel' && Platform.isDesktopApp) this.panels.push(new LocalModelPanel(host.createDiv(), { manager: plugin.local(), model: profile.model, onReady: () => this.refresh() }));
 
     // Test voice with live status.
@@ -222,7 +213,7 @@ export class AudioSettingTab extends PluginSettingTab {
     const status = test.descEl.createSpan({ cls: 'qaudio-status-line', attr: { role: 'status' } });
     let previewButton, stopButton;
     resetPreview = () => {
-      speech.controller.stop(this.previewOwner);
+      speech.stopPreview(this.previewOwner);
       const problem = speech.configurationError();
       status.setText(problem ? errorText(problem, id) : t('settings.unverified'));
       status.toggleClass('is-error', !!problem); status.removeClass('is-ready');
@@ -241,31 +232,18 @@ export class AudioSettingTab extends PluginSettingTab {
       const problem = speech.configurationError();
       if (problem) { status.setText(errorText(problem, id)); status.addClass('is-error'); this.focusProblem(body, problem); return; }
       speech.controller.makeAudio = () => new window.Audio();
-      speech.speak(this.previewOwner, t('tts.sample'));
+      speech.startPreview(this.previewOwner, t('tts.sample'));
     }); });
     resetPreview();
 
     const advanced = this.advanced(body);
     if (profile.baseUrl !== undefined && id !== 'compatible') this.urlField(advanced, profile, value => update('baseUrl', value));
-    if (canLoadVoiceCatalog(id) || (id === 'macos' && Platform.isMacOS)) {
-      const refresh = new Setting(advanced).setName(t('settings.refreshVoices'));
-      const feedback = refresh.descEl.createSpan({ attr: { role: 'status' } });
-      refresh.addButton(b => b.setButtonText(t('settings.refreshVoices')).onClick(async () => {
-        b.setDisabled(true); feedback.setText(t('state.loading'));
-        try {
-          if (id === 'macos') {
-            const { macSpeechVoices } = await import('../core/tts/macos.js');
-            plugin.macVoices = macVoiceChoices(await macSpeechVoices(), key => t(`tts.${key}`), zh);
-          } else {
-            const result = await loadVoiceCatalog(speech.profile(), { request: requestUrl, key: speech.profile().key });
-            plugin.voiceCatalogs[id] = result;
-            if (result.more) new Notice(t('settings.catalogPartial'));
-          }
-          new Notice(t('settings.catalogReady')); this.refresh();
-        } catch (error) { feedback.setText(errorText(error, id)); b.setDisabled(false); }
-      }));
-    }
     if (!advanced.childElementCount) advanced.parentElement.remove();
+    void findSpeechSettings(plugin.app, 'qiaomu-ai-rss').then(found => {
+      if (!found || !body.isConnected) return;
+      new Setting(this.section(body)).setName(t('settings.importRss')).setDesc(t('settings.importRssDesc'))
+        .addButton(b => b.setButtonText(t('settings.import')).onClick(async () => { const keys = await copySpeechSettings(plugin, 'qiaomu-ai-rss'); new Notice(keys < 0 ? t('settings.importNone') : t('settings.imported', { keys })); this.refresh(); }));
+    });
     void plugin.readerSpeechSettings().then(found => {
       if (!found || !body.isConnected) return;
       new Setting(this.section(body)).setName(t('settings.importReader')).setDesc(t('settings.importReaderDesc'))
@@ -284,11 +262,12 @@ export class AudioSettingTab extends PluginSettingTab {
     new Setting(host).setName(t('asr.engine')).addDropdown(drop => {
       if (!engine) drop.addOption('', t('asr.engine.none'));
       if (Platform.isDesktopApp) drop.addOption('local', t('asr.engine.local'));
-      for (const p of settings.profiles) drop.addOption(`cloud:${p.id}`, label(p));
+      const counts = new Map();
+      for (const p of settings.profiles) { const name = label(p), count = (counts.get(name) || 0) + 1; counts.set(name, count); drop.addOption(`cloud:${p.id}`, count > 1 ? `${name} · ${count}` : name); }
       if (settings.profiles.length < MAX_PROFILES) drop.addOption(ADD, t('asr.engine.add'));
       drop.setValue(engine).onChange(async value => {
-        if (value === ADD) { const p = newProfile(); settings.profiles.push(p); settings.engine = `cloud:${p.id}`; }
-        else settings.engine = value;
+        if (value === ADD) { drop.setValue(engine); this.asrModal?.close(); this.asrModal = new AsrServiceModal(this); this.asrModal.open(); return; }
+        settings.engine = value;
         await this.save(); this.refresh();
       });
     });

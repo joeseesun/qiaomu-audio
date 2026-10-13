@@ -10,7 +10,7 @@ export function macVoiceChoices(voices, tx, chinese) {
     || Number(/^zh|^yue/.test(b.lang)) - Number(/^zh|^yue/.test(a.lang)) || b.quality - a.quality).map(v => {
     const alias = RECOMMENDED[v.id];
     const name = alias ? alias[chinese ? 0 : 1] : v.name;
-    return { id: v.id, label: `${name} · ${v.lang}${alias ? ` · ${tx('recommended')}` : v.quality > 1 ? ` · ${tx(v.quality === 3 ? 'voicePremium' : 'voiceEnhanced')}` : ''}`,
+    return { id: v.id, label: `${name} · ${v.lang}${v.quality > 1 ? ` · ${tx(v.quality === 3 ? 'voicePremium' : 'voiceEnhanced')}` : ''}${alias ? ` · ${tx('recommended')}` : ''}`,
       sourceName: alias ? `${v.name} · ${tx('voiceDisplayName')}` : '', recommended: !!alias };
   });
 }

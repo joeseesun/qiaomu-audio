@@ -17,7 +17,7 @@ Read any Obsidian note aloud with one click, and dictate speech straight into yo
 Use the microphone button or the dictation command. Finish to insert recognised text at the captured cursor position; Escape cancels. Failed recognition keeps the recording available for retry or saving.
 
 - Local SenseVoice supports Chinese, English, Japanese, Korean and Cantonese on desktop. An [external runtime setup](docs/local-runtime.md) is required once; then download about 156 MB of model data in settings.
-- Cloud recognition supports SiliconFlow, Doubao, GLM, StepFun, Xiaomi MiMo, Groq and OpenAI, plus local/custom compatible services. Save multiple configurations and switch between them.
+- Cloud recognition supports SiliconFlow, Doubao, GLM, StepFun, Xiaomi MiMo, Groq and OpenAI, plus local/custom compatible services. Choose a service in the Add dialog, confirm its required settings, then switch between saved configurations. Cancel discards the draft and identical configurations are reused.
 - Choose recognition after finishing, or recognition of each phrase after a pause. Optional saved audio uses the vault's attachment folder.
 
 ## Cloud setup
@@ -71,3 +71,9 @@ GPL-3.0-only. Reading code is adapted from Qiaomu Reader (GPL-3.0), and cloud re
 Edge TTS interoperability is based on [rany2/edge-tts](https://github.com/rany2/edge-tts) (LGPL-3.0); see [the license](licenses/edge-tts-LGPL.txt). WebSocket transport uses [ws](https://github.com/websockets/ws) (MIT; license included in the bundle).
 
 Models are not distributed with the plugin: Kokoro (Apache-2.0), MeloTTS (MIT), SenseVoice Small (FunASR Model License). The optional Sherpa ONNX runtime is Apache-2.0 and is installed separately.
+
+## Works independently with Qiaomu AI RSS
+
+Both plugins can read aloud on their own. Starting or previewing speech pauses the other plugin without losing its position. Copy speech settings explicitly once if desired; keys and preferences remain independent. Downloaded local model data is shared, and disabling either plugin leaves the other usable.
+
+Mac system speech automatically lists installed enhanced voices. Search and audition voices in the voice picker; closing the audition restores your reading sentence paused.
