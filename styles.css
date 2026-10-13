@@ -336,8 +336,8 @@ button.qaudio-follow { color: var(--text-normal); }
 .qaudio-modal .setting-item-control button:not(.mod-cta, .mod-warning):hover { background: var(--qaudio-weak); }
 .qaudio-modal .qaudio-setting-note { margin: 0; padding: 0 0 12px; }
 .qaudio-modal .qaudio-details { padding: 8px 0; }
-.qaudio-modal .qaudio-details > summary:has(.qaudio-chevron) { display: flex; align-items: center; gap: 4px; list-style: none; }
-.qaudio-modal .qaudio-details > summary:has(.qaudio-chevron)::-webkit-details-marker { display: none; }
+.qaudio-modal .qaudio-advanced > summary { display: flex; align-items: center; gap: 4px; list-style: none; }
+.qaudio-modal .qaudio-advanced > summary::-webkit-details-marker { display: none; }
 .qaudio-modal .qaudio-details > .qaudio-card { padding: 0 16px; }
 .qaudio-modal .qaudio-status-line { margin: 12px 0; overflow-wrap: anywhere; }
 .qaudio-modal .qaudio-status-line:empty { display: none; }
