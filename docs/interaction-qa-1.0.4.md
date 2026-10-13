@@ -1,4 +1,4 @@
-# Interaction acceptance: 1.0.3
+# Interaction acceptance: 1.0.4
 
 Verified in an isolated macOS Obsidian 1.14.4 vault on 2026-10-13.
 
