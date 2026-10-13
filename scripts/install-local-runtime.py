@@ -52,7 +52,7 @@ def main():
     if source.is_file():
         registry = json.loads(source.read_text(encoding='utf-8'))
     else:
-        url = 'https://raw.githubusercontent.com/joeseesun/qiaomu-audio/1.0.0/src/runtime/models.json'
+        url = 'https://raw.githubusercontent.com/joeseesun/qiaomu-audio/1.0.1/src/runtime/models.json'
         with urllib.request.urlopen(url, timeout=30) as response:
             registry = json.load(response)
     cpu = {'arm64': 'aarch64', 'aarch64': 'aarch64', 'x86_64': 'x86_64', 'amd64': 'x86_64'}.get(platform.machine().lower())

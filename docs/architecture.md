@@ -6,7 +6,7 @@
 |---|---|---|
 | `src/core/tts/` | 朗读服务请求、音色、Edge 客户端、播放控制器、分句 | 乔木 Reader `src/tts-*.js`（原样迁移，仅改导入路径） |
 | `src/core/asr/` | 识别服务列表、三种请求协议、重试、WAV 编码、停顿切块、边说边出字分句 | 乔木 Clipper `asr-settings.ts`、`native/asr_cloud.py`（Python → JS） |
-| `src/runtime/` | 本机运行环境：uv、私有 Python、sherpa-onnx 工作进程（朗读 + 识别）、模型清单 | 乔木 Reader 本机朗读运行时 + 新增 SenseVoice 识别 |
+| `src/runtime/` | 已准备环境的检测、sherpa-onnx 工作进程（朗读 + 识别）和模型数据；依赖安装在外部脚本中完成 | 乔木 Reader 本机朗读运行时 + 新增 SenseVoice 识别 |
 | `src/markdown/speech-source.js` | Markdown → 可朗读文字，并记录每个字在原文中的位置 | 新写 |
 | `src/obsidian/` | 播放条、听写条、编辑器高亮扩展、设置页、首次选择、录音 | 新写 |
 | `src/core/*` 不依赖 Obsidian | 以后可抽成共享包，供 Reader 复用 | — |
@@ -22,7 +22,7 @@
 - 正在朗读的句子：编辑模式用 CM6 装饰高亮；阅读视图会按需重新渲染内容，所以只滚动到对应行，不做逐句高亮。
 - 本机模型若乔木 Reader 已下载同一固定版本，直接只读复用。
 
-## 验证记录
+## 开发阶段原有验证记录
 
 - `npm run check`：i18n 216 个键中英齐全、lint 0 问题、68 个 JS 测试与 4 个 Python 测试通过、构建通过。
 - `scripts/e2e-local-asr.mjs`：真实下载并安装 SenseVoice（约 68 秒），中文、英文样本识别正确，取消请求有效。
@@ -36,3 +36,12 @@
   - 手机端（iOS、Android）真机。
   - Windows / Linux 本机运行时。
   - 豆包、智谱、阶跃星辰、小米 MiMo、Groq、OpenAI 的真实密钥识别：协议照搬 Clipper 已实测的实现，并有单元测试覆盖。
+
+## 1.0.1 发布候选验证（2026-10-13）
+
+- `npm run check`：257 个中英翻译键、71 个 JavaScript 测试、4 个 Python 测试、lint 和生产构建通过。
+- Obsidian 1.13.7 macOS 独立 QA 库：42 项云服务设置交互断言通过，覆盖所有命名云服务的申请/文档链接、必填项、密钥显隐、可访问标签、测试取消与失效处理。
+- 真实浅色/深色设置页；360 像素模拟布局没有卡片溢出。模拟窄屏不代表移动设备验证。
+- 已有本机环境中运行 SenseVoice：中文/英文样例分别约 91/115 毫秒；取消返回 AbortError。没有从插件安装可执行依赖。
+- GitHub CI 覆盖 Windows/macOS/Linux；跨平台 CI 不替代真实设备语音、麦克风或本机安装验收。
+- 云端设置连接成功状态使用可控测试响应验证，未使用真实付费 API 密钥进行所有供应商端到端请求。申请入口部分会跳转登录或对无人浏览器请求返回保护页。

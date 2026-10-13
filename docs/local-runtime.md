@@ -6,7 +6,7 @@ System speech, Mac speech, Edge TTS and cloud providers do not need this setup.
 
 ## macOS and Linux
 
-Download [install-local-runtime.py](https://github.com/joeseesun/qiaomu-audio/releases/download/1.0.0/install-local-runtime.py), inspect it, and run it in a terminal with Python 3.9 or newer:
+Download [install-local-runtime.py](https://github.com/joeseesun/qiaomu-audio/releases/download/1.0.1/install-local-runtime.py), inspect it, and run it in a terminal with Python 3.9 or newer:
 
 ```sh
 python3 ~/Downloads/install-local-runtime.py sensevoice

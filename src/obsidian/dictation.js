@@ -111,6 +111,7 @@ export class DictationManager {
     void session.recorder?.stop();
     if (session.scope) this.plugin.app.keymap.popScope(session.scope);
     session.bar?.remove();
+    session.view.contentEl.removeClass('qaudio-has-dictation');
     this.render();
   }
   // Text goes where the cursor was when dictation started, after anything already dictated.
@@ -160,6 +161,7 @@ export class DictationManager {
 
   mount(session) {
     const { view } = session, plugin = this.plugin;
+    view.contentEl.addClass('qaudio-has-dictation');
     const bar = session.bar = view.contentEl.createDiv({ cls: 'qaudio-bar qaudio-dictation' });
     const labelId = `qaudio-dictation-${Date.now().toString(36)}`;
     bar.createSpan({ cls: 'qaudio-sr', text: t('dictation.label'), attr: { id: labelId } });

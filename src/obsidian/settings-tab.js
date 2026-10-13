@@ -21,7 +21,7 @@ export class AudioSettingTab extends PluginSettingTab {
     return [{
       name: t('settings.title'), desc: t('settings.titleDesc'), searchable: true,
       aliases: ['TTS', 'read aloud', 'dictation', 'speech to text', '朗读', '听写', '语音转文字', '转写'],
-      render: setting => { this.root = setting.settingEl; this.root.addClass('qaudio-settings-definition'); this.renderAll(this.root); },
+      render: setting => { this.root = setting.settingEl; this.root.addClass('qaudio-settings-definition'); this.root.parentElement?.addClass('qaudio-settings-group'); this.renderAll(this.root); },
     }];
   }
   display() { this.root = null; this.renderAll(this.containerEl); }
