@@ -1,3 +1,4 @@
+import { alignWords } from './timing.js';
 // Synthesis only. Playback speed and reading position belong to the controller.
 export const TTS_PROVIDERS = Object.freeze({
   system: { label: 'System voice', voice: '', model: '' },
@@ -33,7 +34,12 @@ export function ttsBaseUrl(value) {
   if (url.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw ttsError('https');
   return url.href.replace(/\/+$/, '').replace(/\/audio\/speech$/, '');
 }
-export function buildSpeechRequest(profile, text, key = '') {
+// Word timestamps are an opt-in audio parameter whose name depends on the model generation.
+function doubaoTiming(resourceId, enabled) {
+  if (!enabled) return {};
+  return /2\.0/.test(resourceId) ? { enable_subtitle: true } : /1\.0/.test(resourceId) ? { enable_timestamp: true } : {};
+}
+export function buildSpeechRequest(profile, text, key = '', timing = false) {
   const { id, voice, model } = profile;
   if (!TTS_PROVIDERS[id] || ['system', 'macos', 'edge'].includes(id)) throw ttsError('provider');
   if (id !== 'compatible' && !key) throw ttsError('key');
@@ -51,7 +57,7 @@ export function buildSpeechRequest(profile, text, key = '') {
     if (!profile.resourceId) throw ttsError('resource');
     return { url: `${base}/unidirectional`, method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Api-Key': key, 'X-Api-Resource-Id': profile.resourceId, 'X-Api-Request-Id': window.crypto.randomUUID() },
-      body: JSON.stringify({ req_params: { text, speaker: voice, audio_params: { format: 'mp3', sample_rate: 24000 } } }) };
+      body: JSON.stringify({ req_params: { text, speaker: voice, audio_params: { format: 'mp3', sample_rate: 24000, ...doubaoTiming(profile.resourceId, timing) } } }) };
   }
   if (id === 'minimax') return { url: `${base}/t2a_v2`, method: 'POST', headers,
     body: JSON.stringify({ model, text, stream: false, output_format: 'hex',
@@ -85,16 +91,28 @@ function decodeBase64(value) {
   catch { throw ttsError('response'); }
 }
 function providerFailure(status) { return ttsError('service', status); }
-function decodeDoubao(text) {
+function doubaoOk(text) {
+  try { return String(text).split(/\r?\n/).filter(l => l.trim()).every(l => [0, 20000000].includes(JSON.parse(l).code)); } catch { return true; }
+}
+function decodeDoubao(text, spoken) {
   let messages;
   try { messages = [JSON.parse(text)]; }
   catch {
     try { messages = text.split(/\r?\n/).filter(line => line.trim()).map(line => JSON.parse(line)); }
     catch { throw ttsError('response'); }
   }
-  const chunks = []; let size = 0;
+  const chunks = [], marks = []; let size = 0, cursor = 0, shift = 0, end = 0;
   for (const message of messages) {
     if (![0, 20000000].includes(message.code)) throw providerFailure(message.code);
+    const words = message.sentence?.words;
+    if (Array.isArray(words) && words.length) {
+      // Later sentences normally continue the clock; if one restarts, shift it.
+      const first = Number(words[0]?.startTime);
+      if (Number.isFinite(first) && first + shift < end - 0.05) shift = end - first;
+      const aligned = alignWords(spoken, words.map(w => ({ ...w, startTime: Number(w.startTime) + shift, endTime: Number(w.endTime) + shift })), cursor);
+      cursor = aligned.cursor; marks.push(...aligned.marks);
+      end = Math.max(end, ...aligned.marks.map(m => m.to), end);
+    }
     if (!message.data) continue;
     const bytes = decodeBase64(message.data); size += bytes.length;
     if (size > 8 * 1024 * 1024) throw ttsError('response');
@@ -103,16 +121,22 @@ function decodeDoubao(text) {
   if (!size) throw ttsError('empty');
   const bytes = new Uint8Array(size); let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  return { bytes, mime: 'audio/mpeg' };
+  return marks.length ? { bytes, mime: 'audio/mpeg', marks } : { bytes, mime: 'audio/mpeg' };
 }
 export async function synthesizeHttp(profile, text, { request, key, signal }) {
   checkTtsSignal(signal);
-  let response = await awaitSpeechRequest(request({ ...buildSpeechRequest(profile, text, key), throw: false }), signal);
+  const timed = profile.id === 'doubao';
+  let response = await awaitSpeechRequest(request({ ...buildSpeechRequest(profile, text, key, timed), throw: false }), signal);
   checkTtsSignal(signal);
+  // A voice or resource that rejects the timestamp parameter still reads aloud, just unaligned.
+  if (timed && (response.status < 200 || response.status >= 300 || !doubaoOk(response.text))) {
+    response = await awaitSpeechRequest(request({ ...buildSpeechRequest(profile, text, key, false), throw: false }), signal);
+    checkTtsSignal(signal);
+  }
   validateResponse(response);
   // Obsidian buffers the HTTP body: join the provider's NDJSON audio packets
   // before playback. This is not a claim of incremental streaming playback.
-  if (profile.id === 'doubao') return decodeDoubao(response.text);
+  if (profile.id === 'doubao') return decodeDoubao(response.text, text);
   if (profile.id === 'minimax') {
     const body = response.json;
     if (body?.base_resp?.status_code !== 0) throw providerFailure(body?.base_resp?.status_code);

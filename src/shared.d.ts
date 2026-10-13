@@ -3,7 +3,9 @@ export interface SpeechApp { workspace: { containerEl: HTMLElement; on(name: str
 export interface SpeechProfile { id: string; label?: string; voice: string; model?: string; baseUrl?: string; region?: string; resourceId?: string; key?: string }
 export interface SpeechSettings { provider: string; profiles: Record<string, Partial<SpeechProfile>>; rate: number; welcomed: boolean }
 export interface SpeechItem { text: string; start: number; end: number }
-export interface SpeechOwner { clearHighlight?: () => void; onSegment?: (item: SpeechItem, index: number) => void | Promise<void>; follow?: boolean }
+export interface SpeechOwner { clearHighlight?: () => void; onSegment?: (item: SpeechItem, index: number) => void | Promise<void>;
+  /** Word being spoken as [start, end) offsets into item.text; null before the first word. Estimated when the voice reports no timing. */
+  onProgress?: (item: SpeechItem, index: number, word: { start: number; end: number } | null) => void; follow?: boolean }
 export interface SpeechController {
   owner: SpeechOwner | null; state: string; error: unknown; index: number; rate: number; items: SpeechItem[]; profile: SpeechProfile;
   cache: { clear(): void }; makeAudio: () => HTMLAudioElement;
