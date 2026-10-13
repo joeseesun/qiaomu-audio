@@ -90,9 +90,9 @@ export class SpeechChoices {
 class VoicePicker extends Modal {
   constructor(choices) { super(choices.host.app); this.choices = choices; this.previewOwner = {}; }
   onOpen() {
-    const { tx, host } = this.choices; this.setTitle(tx('picker')); this.contentEl.addClass('qaudio-voice-picker');
-    this.services = this.contentEl.createDiv(); this.models = this.contentEl.createDiv();
-    const search = this.contentEl.createEl('label'); search.createSpan({ cls: 'qaudio-sr', text: tx('search') });
+    const { tx, host } = this.choices; this.setTitle(tx('picker')); this.contentEl.addClass('qaudio-modal', 'qaudio-voice-picker');
+    this.services = this.contentEl.createDiv('qaudio-voice-services'); this.models = this.contentEl.createDiv('qaudio-voice-models');
+    const search = this.contentEl.createEl('label', { cls: 'qaudio-voice-search' }); search.createSpan({ cls: 'qaudio-sr', text: tx('search') });
     const input = search.createEl('input', { type: 'search', attr: { placeholder: tx('search') } });
     this.list = this.contentEl.createDiv('qaudio-voice-list');
     const status = this.contentEl.createDiv({ attr: { role: 'status', 'aria-live': 'polite' } });

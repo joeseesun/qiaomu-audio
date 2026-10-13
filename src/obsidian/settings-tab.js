@@ -72,7 +72,7 @@ export class AudioSettingTab extends PluginSettingTab {
     head.settingEl.addClass('qaudio-section-head');
   }
   advanced(host) {
-    const details = host.createEl('details', { cls: 'qaudio-details' });
+    const details = host.createEl('details', { cls: 'qaudio-details qaudio-advanced' });
     const summary = details.createEl('summary');
     summary.createSpan({ text: t('settings.advanced') });
     setIcon(summary.createSpan({ cls: 'qaudio-icon qaudio-chevron', attr: { 'aria-hidden': 'true' } }), 'chevron-right');

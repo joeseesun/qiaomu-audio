@@ -23,7 +23,7 @@ export function defaultSettings(desktop = true) {
   return {
     tts: { provider: desktop ? 'edge' : 'system', profiles: {}, rate: 1, welcomed: false },
     // engine: '' (not chosen yet), 'local' (SenseVoice on this computer) or 'cloud:<profile id>'.
-    asr: { engine: '', profiles: [], language: 'auto', mode: 'batch', keepAudio: false },
+    asr: { engine: '', profiles: [], language: 'auto', mode: 'live', keepAudio: true },
   };
 }
 export function normalizeSettings(raw, desktop = true) {
@@ -49,8 +49,8 @@ export function normalizeSettings(raw, desktop = true) {
     asr: {
       engine, profiles,
       language: ASR_LANGUAGES.includes(source.language) ? source.language : 'auto',
-      mode: source.mode === 'live' ? 'live' : 'batch',
-      keepAudio: source.keepAudio === true,
+      mode: ['live', 'batch'].includes(source.mode) ? source.mode : base.asr.mode,
+      keepAudio: typeof source.keepAudio === 'boolean' ? source.keepAudio : base.asr.keepAudio,
     },
   };
 }
