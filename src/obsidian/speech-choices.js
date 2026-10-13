@@ -2,6 +2,8 @@ import { Modal, Notice, Platform, Setting } from 'obsidian';
 import { TTS_MODELS, changeSpeechModel, modelKey, uniqueChoices, canLoadVoiceCatalog } from '../core/tts/choices.js';
 import { LOCAL_MODELS, normalizeLocalProfile } from '../runtime/local.js';
 import { t } from '../i18n.js';
+import { TTS_PROVIDERS } from '../core/tts/providers.js';
+import { hiddenProvider } from '../speech.js';
 import { iconButton } from './ui.js';
 
 // Shared by Audio and RSS. Based on Reader's SpeechChoices: scope voices by model,
@@ -23,6 +25,11 @@ export class SpeechChoices {
     const { id: _id, label: _label, key: _key, ...saved } = next;
     host.settings.tts.profiles[id] = saved;
     await this.onChange(key); if (!this.disposed) this.render();
+  }
+  async provider(id) {
+    this.abort?.abort(); this.host.speech.stopPreview(); this.host.speech.controller.pause();
+    this.host.settings.tts.provider = id; this.nativeAttempted = false; this.message = '';
+    await this.onChange('provider'); if (!this.disposed) this.render();
   }
   field(name, key, values, custom, parent = this.parent) {
     const value = this.host.speech.profile()[key] || '', choices = uniqueChoices(values);
@@ -84,13 +91,20 @@ class VoicePicker extends Modal {
   constructor(choices) { super(choices.host.app); this.choices = choices; this.previewOwner = {}; }
   onOpen() {
     const { tx, host } = this.choices; this.setTitle(tx('picker')); this.contentEl.addClass('qaudio-voice-picker');
-    this.models = this.contentEl.createDiv();
+    this.services = this.contentEl.createDiv(); this.models = this.contentEl.createDiv();
     const search = this.contentEl.createEl('label'); search.createSpan({ cls: 'qaudio-sr', text: tx('search') });
     const input = search.createEl('input', { type: 'search', attr: { placeholder: tx('search') } });
     this.list = this.contentEl.createDiv('qaudio-voice-list');
     const status = this.contentEl.createDiv({ attr: { role: 'status', 'aria-live': 'polite' } });
     const render = () => {
-      const profile = host.speech.profile(), id = profile.id; this.models.empty();
+      const profile = host.speech.profile(), id = profile.id; this.services.empty(); this.models.empty();
+      const service = new Setting(this.services).setName(tx('service')).addDropdown(drop => {
+        drop.selectEl.dataset.speechField = 'provider';
+        for (const [provider, data] of Object.entries(TTS_PROVIDERS)) if (!hiddenProvider(provider, id)) drop.addOption(provider, ['system','macos','localModel'].includes(provider) ? tx(provider) : data.label);
+        drop.setValue(id).onChange(provider => { void this.choices.provider(provider); });
+      });
+      service.nameEl.id = `qiaomu-speech-service-${crypto.randomUUID()}`; service.controlEl.querySelector('select').setAttribute('aria-labelledby', service.nameEl.id);
+      const problem = host.speech.configurationError(profile); if (problem) service.setDesc(this.choices.errorText(problem));
       if (id === 'localModel') this.choices.field(tx('model'), 'model', LOCAL_MODELS.map(model => ({ id: model.id, label: model.label })), false, this.models);
       else if (TTS_MODELS[id]) this.choices.field(tx(id === 'doubao' ? 'resource' : 'model'), modelKey(profile), [...TTS_MODELS[id], ...(host.voiceCatalogs[id]?.models || [])], true, this.models);
       const voices = host.speech.choices(host.speech.profile(), this.choices.options());
@@ -116,10 +130,10 @@ class VoicePicker extends Modal {
 }
 
 export function audioSpeechChoiceText(key) {
-  return t(({ settings: 'player.settings', automatic: 'tts.systemVoice', model: 'settings.model', resource: 'settings.resourceId', voice: 'settings.voice', picker: 'tts.voicePicker', search: 'tts.voiceSearch', custom: 'settings.custom', refresh: 'settings.refreshVoices', loading: 'state.loading', loaded: 'settings.catalogReady', partial: 'settings.catalogPartial', preview: 'settings.preview', sample: 'tts.sample', empty: 'tts.noVoices', verified: 'state.verified', paused: 'state.paused', macHelp: 'tts.macSystemHelp', unavailable: 'tts.unavailableVoice', recommended: 'tts.recommended', voicePremium: 'tts.voicePremium', voiceEnhanced: 'tts.voiceEnhanced', voiceDisplayName: 'tts.voiceDisplayName' })[key] || key);
+  return t(({ service: 'settings.service', system: 'tts.provider.system', macos: 'tts.provider.macos', localModel: 'tts.provider.localModel', settings: 'player.settings', automatic: 'tts.systemVoice', model: 'settings.model', resource: 'settings.resourceId', voice: 'settings.voice', picker: 'tts.voicePicker', search: 'tts.voiceSearch', custom: 'settings.custom', refresh: 'settings.refreshVoices', loading: 'state.loading', loaded: 'settings.catalogReady', partial: 'settings.catalogPartial', preview: 'settings.preview', sample: 'tts.sample', empty: 'tts.noVoices', verified: 'state.verified', paused: 'state.paused', macHelp: 'tts.macSystemHelp', unavailable: 'tts.unavailableVoice', recommended: 'tts.recommended', voicePremium: 'tts.voicePremium', voiceEnhanced: 'tts.voiceEnhanced', voiceDisplayName: 'tts.voiceDisplayName' })[key] || key);
 }
 export function openVoicePicker(host, options) {
-  const panel = host.app.workspace.containerEl.ownerDocument.createDiv();
+  const panel = host.app.workspace.containerEl.ownerDocument.createElement('div');
   const choices = new SpeechChoices(panel, { host, ...options });
   const modal = new VoicePicker(choices); choices.modal = modal;
   modal.onClosed = () => { choices.modal = null; choices.destroy(); };

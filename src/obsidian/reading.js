@@ -132,7 +132,7 @@ export class ReadingManager {
       const index = this.controller.index;
       const profile = this.plugin.speech.profile(), problem = this.plugin.speech.configurationError(profile);
       session.error = problem;
-      if (problem) { this.controller.stop(session.owner); this.render(); return; }
+      if (problem) { this.controller.pause(); this.render(); return; }
       this.controller.start(session.owner, session.items, profile, { index, rate: this.plugin.speech.settings.rate, paused: this.controller.state === 'paused' });
     } else this.retry();
   }
