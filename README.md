@@ -1,0 +1,71 @@
+# Qiaomu Audio
+
+Read any Obsidian note aloud with one click, and dictate speech straight into your notes.
+
+[中文说明](README_ZH.md) · [Releases](https://github.com/joeseesun/qiaomu-audio/releases) · [Help and feedback](https://github.com/joeseesun/qiaomu-audio/issues)
+
+## Read aloud
+
+- Use the speaker button in any Markdown note. Read selected text, start at the cursor, or start from the visible text in reading view.
+- Pause, resume, move between sentences, change speed and choose a voice in a compact playback bar. The current sentence is highlighted. Manual scrolling pauses page following until you choose to return.
+- Frontmatter, code blocks, formulas, comments, embedded media and raw URLs are skipped. Links read their visible text.
+- Choose system speech, Mac speech, Edge TTS, offline Kokoro/MeloTTS, OpenAI and compatible services, Qwen, Doubao, MiniMax, SiliconFlow, ElevenLabs or Azure.
+- Import saved reading settings and keys from Qiaomu Reader. Matching downloaded model data is reused.
+
+## Dictate
+
+Use the microphone button or the dictation command. Finish to insert recognised text at the captured cursor position; Escape cancels. Failed recognition keeps the recording available for retry or saving.
+
+- Local SenseVoice supports Chinese, English, Japanese, Korean and Cantonese on desktop. An [external runtime setup](docs/local-runtime.md) is required once; then download about 156 MB of model data in settings.
+- Cloud recognition supports SiliconFlow, Doubao, GLM, StepFun, Xiaomi MiMo, Groq and OpenAI, plus local/custom compatible services. Save multiple configurations and switch between them.
+- Choose recognition after finishing, or recognition of each phrase after a pause. Optional saved audio uses the vault's attachment folder.
+
+## Cloud setup
+
+Choose a provider, follow **Get a key** or **Setup guide**, paste its API key, and test the voice or connection. Required fields such as Azure region and custom service URL are visible. Service addresses for named providers and low-frequency options are under Advanced.
+
+Keys are hidden by default, can be shown temporarily, and are stored in Obsidian SecretStorage rather than plugin `data.json`. Speech-to-text keys are isolated by provider, and existing keys are migrated to the saved provider. Switching settings or cancelling a test clears its result; a saved configuration is never labelled connected until its test succeeds.
+
+Voice tests send a short sample sentence. Recognition tests send one second of generated audio without opening the microphone. Tests may incur a small provider charge. Tests run only when requested.
+
+## Privacy, network use and external files
+
+- System speech, Mac speech and local model inference do not upload your text or recordings. System voices may depend on your device's OS configuration.
+- Edge TTS sends reading text to Microsoft's speech service. It requires network access, uses an unofficial interoperability protocol, needs no API key, and is desktop-only. Availability is not guaranteed; system speech is an alternative.
+- Cloud providers receive only the text or recording required for the selected action. Their accounts, service access and usage charges are governed by their terms. Local compatible services use localhost; custom remote services receive the same request data.
+- Local model data is downloaded only after you choose Download and use, from fixed upstream Sherpa GitHub releases. File sizes and SHA-256 checksums are verified. Model data, worker configuration, temporary audio and runtime files are outside the vault, in platform application data/cache directories, so multiple vaults can share model data without syncing it. macOS uses `~/Library/Application Support/qiaomu-audio/speech`; Windows uses `%LOCALAPPDATA%\qiaomu-audio\speech`; Linux uses `$XDG_DATA_HOME/qiaomu-audio/speech` or `~/.local/share/qiaomu-audio/speech`.
+- Python/Sherpa dependencies are prepared by a separate optional installer run outside Obsidian. The plugin does not install or update executable dependencies. See [local runtime setup](docs/local-runtime.md) for the external tool's downloads and storage.
+- There is no telemetry. Provider console/help links open in your browser without API credentials. About-page support images are requested from `radio.qiaomu.ai` only when the About section is opened.
+
+## Install
+
+Use the [latest release](https://github.com/joeseesun/qiaomu-audio/releases/latest). For manual installation, put `main.js`, `manifest.json` and `styles.css` in `<vault>/.obsidian/plugins/qiaomu-audio/`, then enable Qiaomu Audio in Community plugins. The [community directory entry](https://community.obsidian.md/plugins/qiaomu-audio) is the official listing when its review and indexing are complete.
+
+Mobile uses system speech and cloud services; Edge, Mac speech and managed local models are desktop features. The minimum Obsidian version is 1.11.4. Windows/Linux automated checks do not prove native device playback; mobile device playback and microphone acceptance have not yet been verified.
+
+## For other plugins
+
+```js
+const audio = app.plugins.plugins['qiaomu-audio']?.api;
+await audio?.speak('Hello');
+const text = await audio?.transcribe(blob); // Blob / ArrayBuffer / Float32Array
+// Start dictation in the current note:
+audio?.startDictation();
+```
+
+## Development
+
+```sh
+npm ci
+npm run check
+```
+
+The check runs English/Chinese translation validation, ESLint, Node/Python tests and the production build. `node scripts/e2e-local-asr.mjs` downloads and checks the local recognition model when its external runtime is prepared. See [architecture](docs/architecture.md).
+
+## License and attribution
+
+GPL-3.0-only. Reading code is adapted from Qiaomu Reader (GPL-3.0), and cloud recognition provider protocols from Qiaomu Clipper (MIT), both by 向阳乔木.
+
+Edge TTS interoperability is based on [rany2/edge-tts](https://github.com/rany2/edge-tts) (LGPL-3.0); see [the license](licenses/edge-tts-LGPL.txt). WebSocket transport uses [ws](https://github.com/websockets/ws) (MIT; license included in the bundle).
+
+Models are not distributed with the plugin: Kokoro (Apache-2.0), MeloTTS (MIT), SenseVoice Small (FunASR Model License). The optional Sherpa ONNX runtime is Apache-2.0 and is installed separately.
