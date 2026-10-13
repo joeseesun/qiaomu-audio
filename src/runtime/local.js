@@ -10,7 +10,7 @@ export const LOCAL_ASR_MODEL = 'sensevoice';
 export const LOCAL_DEFAULT_MODEL = 'kokoro';
 export const LOCAL_DEFAULT_VOICE = registry.models.kokoro.defaultVoice;
 export function normalizeLocalProfile(profile = {}) {
-  const model = registry.models[profile.model] ? profile.model : LOCAL_DEFAULT_MODEL;
+  const model = registry.models[profile.model]?.kind !== 'asr' && registry.models[profile.model] ? profile.model : LOCAL_DEFAULT_MODEL;
   const voice = registry.models[model].voices.some(v => v.id === profile.voice) ? profile.voice : registry.models[model].defaultVoice;
   return { ...profile, model, voice };
 }

@@ -2,7 +2,7 @@ import obsidianmd from "eslint-plugin-obsidianmd";
 
 // The community scanner runs this rule set and publishes the result, so warnings matter here.
 export default [
-  { ignores: ["main.js", "node_modules/**"] },
+  { ignores: ["main.js", "node_modules/**", "src/shared.d.ts"] },
   ...obsidianmd.configs.recommended,
   {
     // Node-only tests and dev scripts: never bundled into the plugin.

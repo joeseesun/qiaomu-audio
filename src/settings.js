@@ -2,7 +2,7 @@ import { TTS_PROVIDERS } from './core/tts/providers.js';
 import { ASR_LANGUAGES, MAX_PROFILES, cleanProfile } from './core/asr/providers.js';
 
 // Keys live in Obsidian's SecretStorage, never in data.json. IDs: lowercase letters, digits and dashes.
-export const ttsSecretId = provider => `qiaomu-audio-tts-${String(provider).toLowerCase()}`;
+export const ttsSecretId = (provider, namespace = 'qiaomu-audio') => `${namespace}-tts-${String(provider).toLowerCase()}`;
 export const asrSecretId = (profileId, provider = '') => `qiaomu-audio-asr-${String(profileId).toLowerCase()}${provider ? `-${String(provider).toLowerCase()}` : ''}`;
 
 // The old profile-only key belongs exclusively to the provider saved with that profile.
@@ -31,7 +31,7 @@ export function normalizeSettings(raw, desktop = true) {
   const tts = { ...base.tts, ...(value.tts && typeof value.tts === 'object' ? value.tts : {}) };
   if (!TTS_PROVIDERS[tts.provider]) tts.provider = base.tts.provider;
   if (!tts.profiles || typeof tts.profiles !== 'object' || Array.isArray(tts.profiles)) tts.profiles = {};
-  for (const id of Object.keys(tts.profiles)) if (!TTS_PROVIDERS[id] || typeof tts.profiles[id] !== 'object') delete tts.profiles[id];
+  tts.profiles = Object.fromEntries(Object.entries(tts.profiles).filter(([id, p]) => TTS_PROVIDERS[id] && p && typeof p === 'object' && !Array.isArray(p)).map(([id, p]) => [id, Object.fromEntries(['voice', 'model', 'baseUrl', 'region', 'resourceId'].filter(key => typeof p[key] === 'string').map(key => [key, p[key]]))]));
   tts.rate = RATES.includes(Number(tts.rate)) ? Number(tts.rate) : 1;
   tts.welcomed = tts.welcomed === true;
 
@@ -45,6 +45,7 @@ export function normalizeSettings(raw, desktop = true) {
   if (engine && engine !== 'local' && !engine.startsWith('cloud:')) engine = '';
   return {
     tts,
+    readingProgress: value.readingProgress && typeof value.readingProgress === 'object' && !Array.isArray(value.readingProgress) ? value.readingProgress : {},
     asr: {
       engine, profiles,
       language: ASR_LANGUAGES.includes(source.language) ? source.language : 'auto',
