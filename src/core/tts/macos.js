@@ -1,6 +1,7 @@
 /* global require -- Obsidian's desktop CommonJS loader supplies this function. */
 import { Platform } from 'obsidian';
 import { checkTtsSignal, ttsError } from './providers.js';
+import { activeRange } from './timing.js';
 
 // Fixed source only. Reading text and paths travel as JSON on stdin, never as
 // executable source, shell arguments or Apple Events to another application.
@@ -101,15 +102,15 @@ export function macSpeechWav(bytes, result) {
   writeTag(0, 'RIFF'); out.setUint32(4, wav.length - 8, true); writeTag(8, 'WAVE'); writeTag(12, 'fmt '); out.setUint32(16, 16, true);
   out.setUint16(20, 1, true); out.setUint16(22, 1, true); out.setUint32(24, format.rate, true); out.setUint32(28, format.rate * 2, true);
   out.setUint16(32, 2, true); out.setUint16(34, 16, true); writeTag(36, 'data'); out.setUint32(40, frames * 2, true);
-  let peak = 0;
+  let peak = 0; const pcm = new Int16Array(frames);
   for (let i = 0; i < frames; i++) {
     const value = format.code === 3 ? view.getFloat32(offset + i * 4, true) : view.getInt16(offset + i * 2, true) / 32768;
     if (!Number.isFinite(value)) throw ttsError('response');
     peak = Math.max(peak, Math.abs(value));
-    const sample = Math.max(-1, Math.min(1, value)); out.setInt16(44 + i * 2, Math.round(sample * (sample < 0 ? 32768 : 32767)), true);
+    const sample = Math.max(-1, Math.min(1, value)); pcm[i] = Math.round(sample * (sample < 0 ? 32768 : 32767)); out.setInt16(44 + i * 2, pcm[i], true);
   }
   if (peak < 0.001) throw ttsError('empty');
-  return { bytes: wav, mime: 'audio/wav' };
+  return { bytes: wav, mime: 'audio/wav', active: activeRange(pcm, format.rate) };
 }
 
 export async function macSpeechVoices(signal) {
