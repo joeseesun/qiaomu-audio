@@ -145,6 +145,8 @@ export class ReadingManager {
     this.controller.stop(session.owner);
     showSpeechRange(session.view, null);
     session.unwatch?.(); session.bar?.remove();
+    session.barObserver?.disconnect();
+    session.view.contentEl.style.removeProperty('--qaudio-player-height');
     session.view.contentEl.removeClass('qaudio-has-bar');
     this.render();
   }
@@ -174,6 +176,12 @@ export class ReadingManager {
     ui.close = iconButton(row, 'x', t('player.close'), () => this.stop());
     ui.message = bar.createDiv({ cls: 'qaudio-bar-message', attr: { role: 'status', 'aria-live': 'polite' } });
     ui.position = bar.createDiv({ cls: 'qaudio-sr', attr: { 'aria-live': 'off' } });
+    const win = bar.ownerDocument.defaultView;
+    session.barObserver = new win.ResizeObserver(entries => {
+      const height = entries[0]?.borderBoxSize?.[0]?.blockSize;
+      if (height && this.session === session) view.contentEl.style.setProperty('--qaudio-player-height', `${height}px`);
+    });
+    session.barObserver.observe(bar);
     this.render();
   }
   voiceMenu() {

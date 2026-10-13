@@ -10,7 +10,7 @@ export class ChooseEngineModal extends Modal {
   onOpen() {
     const { contentEl, plugin } = this;
     this.setTitle(t('choose.title'));
-    contentEl.addClass('qaudio-choose');
+    contentEl.addClass('qaudio-modal', 'qaudio-choose');
     if (Platform.isDesktopApp) {
       const local = contentEl.createDiv('qaudio-option');
       local.createDiv({ cls: 'qaudio-option-title', text: t('choose.local') });

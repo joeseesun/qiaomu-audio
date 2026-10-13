@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { ASR_PROVIDERS, asrBaseUrl, cleanProfile, cloudConfig, newProfile, providerOf, withProvider } from '../src/core/asr/providers.js';
 import { buildAsrRequest, multipart, parseAsrResponse, recognizeCloud, tidyTranscript } from '../src/core/asr/request.js';
 import { PhraseSegmenter, TARGET_RATE, encodeWav, hasSpeech, joinTranscript, pauseMidpoints, planChunks, resample, splitForRecognition } from '../src/core/asr/audio.js';
-import { normalizeSettings, asrSecretId, ttsSecretId } from '../src/settings.js';
+import { defaultSettings, normalizeSettings, asrSecretId, ttsSecretId } from '../src/settings.js';
 
 globalThis.window = globalThis;
 const wav = new Uint8Array([82, 73, 70, 70, 1, 2, 3, 4]);
@@ -96,10 +96,29 @@ test('profiles are cleaned, deduplicated and keep the key out of settings', () =
 test('settings normalise unknown values and drop the local engine on mobile', () => {
   const s = normalizeSettings({ tts: { provider: 'nope', rate: 9 }, asr: { engine: 'local', mode: 'x', language: 'xx', profiles: [{ id: 'p1', provider: 'glm' }] } }, false);
   assert.equal(s.tts.provider, 'system'); assert.equal(s.tts.rate, 1);
-  assert.equal(s.asr.engine, ''); assert.equal(s.asr.mode, 'batch'); assert.equal(s.asr.language, 'auto');
+  assert.equal(s.asr.engine, ''); assert.equal(s.asr.mode, 'live'); assert.equal(s.asr.language, 'auto');
   const d = normalizeSettings({ asr: { engine: 'cloud:missing', profiles: [{ id: 'p1', provider: 'glm' }] } }, true);
   assert.equal(d.asr.engine, 'cloud:p1');
   assert.equal(normalizeSettings(undefined, true).tts.provider, 'edge');
+});
+
+test('fresh and incomplete dictation settings default to live text with an audio attachment', () => {
+  for (const desktop of [true, false]) {
+    for (const settings of [defaultSettings(desktop), ...[undefined, null, {}, { asr: {} }, { asr: { mode: 'invalid', keepAudio: 'false' } }].map(raw => normalizeSettings(raw, desktop))]) {
+      assert.equal(settings.asr.mode, 'live');
+      assert.equal(settings.asr.keepAudio, true);
+    }
+  }
+});
+
+test('saved dictation choices survive normalization and save/reload', () => {
+  for (const mode of ['live', 'batch']) for (const keepAudio of [true, false]) {
+    const saved = { asr: { mode, keepAudio, language: 'zh' } };
+    const reloaded = normalizeSettings(JSON.parse(JSON.stringify(normalizeSettings(saved))));
+    assert.equal(reloaded.asr.mode, mode);
+    assert.equal(reloaded.asr.keepAudio, keepAudio);
+    assert.equal(reloaded.asr.language, 'zh');
+  }
 });
 
 const tone = (seconds, amp = 0.3, rate = TARGET_RATE) => Float32Array.from({ length: Math.round(seconds * rate) }, (_, i) => amp * Math.sin(i / 3));

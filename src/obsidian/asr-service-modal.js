@@ -6,7 +6,7 @@ import { errorText, t } from '../i18n.js';
 // Nothing is persisted until the user confirms. Escape, close and Cancel discard the draft.
 export class AsrServiceModal extends Modal {
   constructor(tab) { super(tab.app); this.tab = tab; this.draftKeys = new Map(); }
-  onOpen() { this.setTitle(t('asr.addTitle')); this.contentEl.addClass('qaudio-asr-service'); this.render(); }
+  onOpen() { this.setTitle(t('asr.addTitle')); this.contentEl.addClass('qaudio-modal', 'qaudio-asr-service'); this.render(); }
   onClose() { this.closed = true; this.draftKeys.clear(); this.profile = null; this.contentEl.empty(); }
   render() {
     const root = this.contentEl; root.empty();
@@ -38,6 +38,7 @@ export class AsrServiceModal extends Modal {
     }
     this.feedback = root.createDiv({ cls: 'qaudio-status-line', attr: { role: 'status', 'aria-live': 'polite' } });
     const footer = new Setting(root);
+    footer.settingEl.addClass('qaudio-modal-footer');
     footer.addButton(button => button.setButtonText(t('settings.cancel')).onClick(() => this.close()));
     footer.addButton(button => button.setButtonText(t('asr.addConfirm')).setCta().setDisabled(!this.profile).onClick(() => { void this.confirm(button); }));
     this.tab.labelInputs(root);
