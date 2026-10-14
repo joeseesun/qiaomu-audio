@@ -1,6 +1,7 @@
 import { TTS_PROVIDERS } from './core/tts/providers.js';
 import { ASR_LANGUAGES, MAX_PROFILES, cleanProfile } from './core/asr/providers.js';
 import { normalizeRecentChoices } from './core/tts/recent.js';
+import { cleanAccounts } from './core/share/brand.js';
 
 // Keys live in Obsidian's SecretStorage, never in data.json. IDs: lowercase letters, digits and dashes.
 export const ttsSecretId = (provider, namespace = 'qiaomu-audio') => `${namespace}-tts-${String(provider).toLowerCase()}`;
@@ -25,6 +26,22 @@ export function defaultSettings(desktop = true) {
     tts: { provider: desktop ? 'edge' : 'system', profiles: {}, rate: 1, welcomed: false, recent: [] },
     // engine: '' (not chosen yet), 'local' (SenseVoice on this computer) or 'cloud:<profile id>'.
     asr: { engine: '', profiles: [], language: 'auto', mode: 'live', keepAudio: true },
+    // Last export choices plus the author's signature used on the video cover and end card.
+    share: { format: desktop ? 'mp4' : 'mp3', videos: ['portrait'], speed: 1, cover: true, outro: true, srt: false, coverImage: false, embed: true,
+      name: '', avatar: '', background: '', folder: '', accounts: [] },
+  };
+}
+export const SHARE_SPEEDS = { min: 0.75, max: 2, step: 0.05 };
+const cleanText = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
+function normalizeShare(raw, base, desktop) {
+  const value = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}, flag = (key) => (typeof value[key] === 'boolean' ? value[key] : base[key]);
+  const speed = Math.round(Number(value.speed) / SHARE_SPEEDS.step) * SHARE_SPEEDS.step;
+  const videos = (Array.isArray(value.videos) ? value.videos : []).filter((v, i, all) => ['portrait', 'landscape'].includes(v) && all.indexOf(v) === i);
+  return {
+    format: value.format === 'mp3' || !desktop ? 'mp3' : 'mp4', videos: videos.length ? videos : base.videos,
+    speed: speed >= SHARE_SPEEDS.min && speed <= SHARE_SPEEDS.max ? Math.round(speed * 100) / 100 : 1,
+    cover: flag('cover'), outro: flag('outro'), srt: flag('srt'), coverImage: flag('coverImage'), embed: flag('embed'),
+    name: cleanText(value.name, 40), avatar: cleanText(value.avatar, 300), background: cleanText(value.background, 300), folder: desktop ? cleanText(value.folder, 500) : '', accounts: cleanAccounts(value.accounts),
   };
 }
 export function normalizeSettings(raw, desktop = true) {
@@ -47,6 +64,7 @@ export function normalizeSettings(raw, desktop = true) {
   if (engine && engine !== 'local' && !engine.startsWith('cloud:')) engine = '';
   return {
     tts,
+    share: normalizeShare(value.share, base.share, desktop),
     readingProgress: value.readingProgress && typeof value.readingProgress === 'object' && !Array.isArray(value.readingProgress) ? value.readingProgress : {},
     asr: {
       engine, profiles,

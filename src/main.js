@@ -8,6 +8,7 @@ import { createLocalTtsManager } from './runtime/local.js';
 import { audioEditorExtension, editorView } from './obsidian/editor-extension.js';
 import { ReadingManager } from './obsidian/reading.js';
 import { DictationManager } from './obsidian/dictation.js';
+import { ShareManager } from './obsidian/share.js';
 import { AudioSettingTab } from './obsidian/settings-tab.js';
 import { quietAction } from './obsidian/ui.js';
 import { createApi } from './api.js';
@@ -24,6 +25,7 @@ export default class QiaomuAudioPlugin extends Plugin {
     this.transcription = new TranscriptionService(this);
     this.reading = new ReadingManager(this);
     this.dictation = new DictationManager(this);
+    this.share = new ShareManager(this);
     this.registerEditorExtension(audioEditorExtension((cm, changes) => {
       this.reading.onDocChange(cm, changes); this.dictation.onDocChange(cm, changes);
     }, cm => { if (editorView(this.reading.session?.view) === cm) this.reading.render(); }));
@@ -34,6 +36,7 @@ export default class QiaomuAudioPlugin extends Plugin {
       menu.addItem(item => item.setSection('qiaomu-audio').setIcon('volume-2')
         .setTitle(t(editor.somethingSelected() ? 'cmd.readSelection' : 'cmd.readHere'))
         .onClick(() => this.reading.start(view, editor.somethingSelected() ? 'selection' : 'cursor')));
+      menu.addItem(item => item.setSection('qiaomu-audio').setIcon('share-2').setTitle(t('cmd.share')).onClick(() => this.share.open(view)));
       menu.addItem(item => item.setSection('qiaomu-audio').setIcon('mic').setTitle(t('cmd.dictateHere')).onClick(() => this.dictation.toggle(view)));
     }));
     this.app.workspace.onLayoutReady(() => this.decorateViews());
@@ -97,6 +100,12 @@ export default class QiaomuAudioPlugin extends Plugin {
       const view = info instanceof MarkdownView ? info : this.activeView();
       if (!view) return false;
       if (!checking) this.reading.start(view, 'selection');
+      return true;
+    } });
+    this.addCommand({ id: 'export-share', name: t('cmd.share'), icon: 'share-2', editorCheckCallback: (checking, editor, info) => {
+      const view = info instanceof MarkdownView ? info : this.activeView();
+      if (!view?.file) return false;
+      if (!checking) this.share.open(view);
       return true;
     } });
     this.addCommand({ id: 'toggle-reading', name: t('cmd.toggle'), icon: 'play', checkCallback: whenReading(() => this.reading.toggle()) });

@@ -15,6 +15,16 @@ Read any Obsidian note aloud with one click, and dictate speech straight into yo
 - Choose system speech, Mac speech, Edge TTS, offline Kokoro/MeloTTS, OpenAI and compatible services, Qwen, Doubao, MiniMax, SiliconFlow, ElevenLabs or Azure.
 - Import saved reading settings and keys from Qiaomu Reader. Matching downloaded model data is reused.
 
+## Export and share (MP3 / MP4)
+
+Use "Export as audio or video…" in the context menu or command palette to turn text into a file you can send to a friend or post, in the voice you already chose.
+
+- Scope: the selection, the whole note, from the cursor, the current section, or several chosen sections. Review or fix the spoken text before exporting (it never changes your note), and audition the voice first.
+- Speed 0.75–2× with the pitch preserved. `**Bold**` and `==highlighted==` words are emphasised in the subtitles.
+- MP3 works everywhere and carries a title and author. MP4 (desktop only) shows a waveform that moves with the audio and word-by-word highlighted subtitles, as portrait 9:16, landscape 16:9 or both, with an optional cover intro and a terminal-style end card. Subtitles (.srt) and the cover image can be exported too.
+- Set your name, avatar and where to find you in Settings → Share; they are added automatically. Files go to the vault attachments folder by default, or to any folder on your computer.
+- Browser "system speech" produces no audio file and cannot be exported; choose another voice. Cloud voices bill by character, so the dialog shows the character count first.
+
 ## Dictate
 
 Use the microphone button or the dictation command. Finish to insert recognised text at the captured cursor position; Escape cancels. Failed recognition keeps the recording available for retry or saving.

@@ -11,6 +11,10 @@ import { SpeechChoices, audioSpeechChoiceText } from './speech-choices.js';
 import { AsrServiceModal } from './asr-service-modal.js';
 import { LocalModelPanel } from './local-panel.js';
 import { findSpeechSettings, copySpeechSettings } from '../shared/configuration.js';
+import { MAX_ACCOUNTS, PLATFORMS } from '../core/share/brand.js';
+import { ImageSuggest } from './image-suggest.js';
+import { iconButton } from './ui.js';
+import { pickFolder } from './export-folder.js';
 
 const CUSTOM = '__custom__';
 const ADD = '__add__';
@@ -33,13 +37,14 @@ export class AudioSettingTab extends PluginSettingTab {
   renderAll(root) {
     this.cleanup(); root.empty(); root.addClass('qaudio-settings');
     if (this.focusSection === 'asr') { this.tab = 'dictation'; this.focusSection = null; }
+    if (this.focusSection === 'share') { this.tab = 'share'; this.focusSection = null; }
     const tab = this.tab || 'read';
     const header = root.createDiv('qaudio-settings-header');
     const identity = header.createDiv('qaudio-settings-identity');
     setIcon(identity.createSpan({ cls: 'qaudio-settings-mark', attr: { 'aria-hidden': 'true' } }), 'audio-lines');
     new Setting(identity).setName(t('settings.title')).setHeading();
     const tabs = header.createDiv({ cls: 'qaudio-tabs', attr: { role: 'tablist' } });
-    const sections = [['read', 'volume-2', t('settings.read')], ['dictation', 'mic', t('settings.dictation')], ['about', 'heart', t('settings.about')]];
+    const sections = [['read', 'volume-2', t('settings.read')], ['dictation', 'mic', t('settings.dictation')], ['share', 'share-2', t('settings.share')], ['about', 'heart', t('settings.about')]];
     const select = id => { this.tab = id; this.refresh(); root.querySelector('[role=tab][aria-selected=true]')?.focus(); };
     sections.forEach(([id, icon, label], index) => {
       const selected = id === tab;
@@ -57,6 +62,7 @@ export class AudioSettingTab extends PluginSettingTab {
     const body = root.createDiv({ cls: 'qaudio-settings-body', attr: { role: 'tabpanel' } });
     if (tab === 'read') this.renderSpeech(body);
     if (tab === 'dictation') this.renderDictation(body);
+    if (tab === 'share') this.renderShare(body);
     if (tab === 'about') this.renderAbout(body);
     this.labelInputs(root);
   }
@@ -253,6 +259,54 @@ export class AudioSettingTab extends PluginSettingTab {
           this.refresh();
         }));
     });
+  }
+
+  // Signature used on exported videos: name, avatar and where to follow. Everything is optional.
+  renderShare(body) {
+    const plugin = this.plugin, share = plugin.settings.share;
+    const commit = async (render = false) => { await this.save(); if (render) this.refresh(); };
+    const identity = this.section(body, t('settings.shareSection'), t('settings.shareSectionDesc'));
+    new Setting(identity).setName(t('settings.shareName')).addText(text => {
+      text.setPlaceholder(t('settings.shareNamePlaceholder')).setValue(share.name); text.inputEl.maxLength = 40;
+      text.inputEl.addEventListener('change', () => { share.name = text.getValue().trim(); void commit(); });
+    });
+    const image = (name, desc, key) => {
+      const row = new Setting(identity).setName(name).setDesc(share[key] || desc);
+      row.addButton(b => b.setButtonText(t('settings.shareChoose')).onClick(() => new ImageSuggest(plugin.app, t('settings.shareChoose'), path => { share[key] = path; void commit(true); }).open()));
+      if (share[key]) row.addButton(b => b.setButtonText(t('settings.shareClear')).onClick(() => { share[key] = ''; void commit(true); }));
+    };
+    image(t('settings.shareAvatar'), t('settings.shareAvatarDesc'), 'avatar');
+    image(t('settings.shareBackground'), t('settings.shareBackgroundDesc'), 'background');
+
+    if (Platform.isDesktopApp) {
+      const place = this.section(body, t('settings.shareFolderSection'), t('settings.shareFolderSectionDesc'));
+      const row = new Setting(place).setName(t('settings.shareFolder'));
+      let input;
+      row.addText(text => {
+        input = text; text.setPlaceholder(t('settings.shareFolderPlaceholder')).setValue(share.folder); text.inputEl.spellcheck = false;
+        text.inputEl.addEventListener('change', () => { share.folder = text.getValue().trim(); void commit(true); });
+      });
+      row.addButton(b => b.setButtonText(t('settings.shareChoose')).onClick(async () => {
+        const chosen = await pickFolder(plugin.app.workspace.containerEl.ownerDocument);
+        if (chosen) { share.folder = chosen; void commit(true); } else { new Notice(t('settings.shareFolderTypeIt')); input.inputEl.focus(); }
+      }));
+      if (share.folder) row.addButton(b => b.setButtonText(t('settings.shareFolderReset')).onClick(() => { share.folder = ''; void commit(true); }));
+      row.setDesc(share.folder ? t('settings.shareFolderOutside') : t('settings.shareFolderVault'));
+    }
+
+    const accounts = this.section(body, t('settings.shareAccounts'), t('settings.shareAccountsDesc'));
+    share.accounts.forEach((account, index) => {
+      const row = new Setting(accounts).setName(t('settings.shareAccount', { number: index + 1 }));
+      row.addDropdown(drop => {
+        for (const kind of Object.keys(PLATFORMS)) drop.addOption(kind, t(`share.platform.${kind}`));
+        drop.setValue(account.kind).onChange(value => { account.kind = value; void commit(true); });
+      });
+      if (account.kind === 'custom') row.addText(text => { text.setPlaceholder(t('settings.shareAccountLabel')).setValue(account.label); text.inputEl.maxLength = 20; text.inputEl.addEventListener('change', () => { account.label = text.getValue().trim(); void commit(); }); });
+      row.addText(text => { text.setPlaceholder(t('settings.shareAccountHandle')).setValue(account.handle); text.inputEl.maxLength = 80; text.inputEl.spellcheck = false; text.inputEl.addEventListener('change', () => { account.handle = text.getValue().trim(); void commit(); }); });
+      iconButton(row.controlEl, 'trash-2', t('settings.shareRemoveAccount'), () => { share.accounts.splice(index, 1); void commit(true); });
+    });
+    if (share.accounts.length < MAX_ACCOUNTS) new Setting(accounts).addButton(b => b.setButtonText(t('settings.shareAddAccount')).onClick(() => { share.accounts.push({ kind: 'x', handle: '', label: '' }); void commit(true); }));
+    if (!Platform.isDesktopApp) body.createEl('p', { cls: 'qaudio-share-hint', text: t('share.videoDesktop') });
   }
 
   renderDictation(body) {

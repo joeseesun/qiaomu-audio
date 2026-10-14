@@ -26,7 +26,7 @@ for (const file of files) {
 }
 // Every error code the core modules can raise has advice.
 for (const code of ['key', 'url', 'https', 'model', 'auth', 'quota', 'server', 'service', 'rateLimit', 'timeout', 'network', 'response', 'protocol', 'noEngine',
-  'micDenied', 'micMissing', 'micBusy', 'micUnsupported', 'localMissing', 'localInference', 'localEnvironment', 'localInstall', 'localDownload', 'localChecksum']) {
+  'micDenied', 'micMissing', 'micBusy', 'micUnsupported', 'localMissing', 'localInference', 'localEnvironment', 'localInstall', 'localDownload', 'localChecksum', 'videoUnsupported', 'systemExport', 'folderInvalid', 'folderWrite', 'folderDesktop']) {
   if (!STRINGS[`error.${code}`]) problems.push(`error.${code}: missing`);
 }
 for (const phase of ['unknown', 'missing', 'runtime', 'environment', 'download', 'downloaded', 'extract', 'installed', 'verify', 'ready', 'cancelled', 'cancelling', 'server']) {

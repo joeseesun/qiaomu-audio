@@ -32,6 +32,8 @@
     "obsidian": "latest"
   },
   "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
+    "mp4-muxer": "^5.2.2",
     "ws": "^8.22.0"
   },
   "allowScripts": {

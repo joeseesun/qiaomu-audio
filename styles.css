@@ -404,3 +404,43 @@ button.qaudio-follow { color: var(--text-normal); }
 @media (pointer: coarse) {
   .qaudio-modal :is(button, input, select), .qaudio-voice-row .qaudio-button { min-height: 44px; }
 }
+
+/* Share: export as audio or video */
+.qaudio-share-modal { width: min(560px, 94vw); max-height: 90vh; display: flex; flex-direction: column; }
+.qaudio-share-modal .modal-content.qaudio-share { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.qaudio-modal .qaudio-hidden.qaudio-hidden { display: none; }
+.qaudio-share .qaudio-share-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+.qaudio-share .setting-item { padding: 8px 0; }
+.qaudio-share .qaudio-share-body.is-busy { opacity: 0.5; pointer-events: none; }
+.qaudio-share .qaudio-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.qaudio-share .qaudio-share-row { margin-bottom: 4px; }
+.qaudio-modal.qaudio-share .qaudio-chips button.qaudio-chip { height: auto; min-height: 30px; padding: 4px 12px; border-radius: 999px; background: transparent; box-shadow: none; border: 1px solid var(--qaudio-line); color: var(--text-muted); cursor: pointer; }
+.qaudio-modal.qaudio-share .qaudio-chips button.qaudio-chip:hover { background: var(--qaudio-weak); color: var(--text-normal); }
+.qaudio-modal.qaudio-share .qaudio-chips button.qaudio-chip[aria-pressed="true"] { background: var(--qaudio-ink); color: var(--qaudio-paper); border-color: var(--qaudio-ink); }
+.qaudio-modal.qaudio-share .qaudio-chips button.qaudio-chip:disabled { opacity: 0.4; cursor: default; }
+.qaudio-share .qaudio-share-stats { color: var(--text-muted); font-size: var(--font-ui-small); padding-bottom: 8px; }
+.qaudio-share .qaudio-share-warn { margin-top: 4px; color: var(--text-warning, var(--text-muted)); }
+.qaudio-share .qaudio-share-hint { margin: 6px 0 0; color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.qaudio-share .qaudio-share-hint:empty { display: none; }
+.qaudio-share .qaudio-share-sections { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; margin-bottom: 8px; padding: 6px 8px; border: 1px solid var(--qaudio-line); border-radius: 8px; }
+.qaudio-share .qaudio-share-section { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.qaudio-share .qaudio-share-textarea { width: 100%; margin-top: 8px; resize: vertical; font-size: var(--font-ui-small); line-height: 1.5; }
+.qaudio-share .qaudio-share-value { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.qaudio-share .qaudio-share-previews { display: flex; gap: 10px; margin-top: 8px; align-items: flex-start; }
+.qaudio-share .qaudio-share-frame { flex: 0 0 auto; width: 92px; border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 1px var(--qaudio-line); }
+.qaudio-share .qaudio-share-previews.is-landscape .qaudio-share-frame { width: 168px; }
+.qaudio-share .qaudio-share-frame canvas { display: block; width: 100%; height: auto; }
+.qaudio-share .qaudio-share-footer { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--qaudio-line); display: flex; flex-direction: column; gap: 10px; }
+.qaudio-share .qaudio-share-buttons { display: flex; justify-content: flex-end; gap: 8px; }
+.qaudio-share .qaudio-share-progress { display: flex; align-items: center; gap: 12px; color: var(--text-muted); font-size: var(--font-ui-small); }
+.qaudio-share .qaudio-share-progress progress { flex: 1; height: 6px; }
+.qaudio-share .qaudio-share-error { color: var(--text-error); font-size: var(--font-ui-small); }
+.qaudio-share .qaudio-share-results { display: flex; flex-direction: column; gap: 4px; }
+.qaudio-share .qaudio-share-result { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--qaudio-line); }
+.qaudio-share .qaudio-share-file { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.qaudio-share .qaudio-share-size { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.qaudio-share .qaudio-share-reveal { height: auto; min-height: 30px; padding: 4px 10px; }
+@container (max-width: 420px) {
+  .qaudio-share .qaudio-share-frame { width: 72px; }
+  .qaudio-share .qaudio-share-previews.is-landscape .qaudio-share-frame { width: 120px; }
+}
