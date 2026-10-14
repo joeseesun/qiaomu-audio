@@ -22,3 +22,25 @@ jobs:
           python-version: '3.11'
       - run: npm ci
       - run: npm run check
+      - name: Install isolated Windows Obsidian 1.14.4
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'Obsidian-1.14.4.exe'
+          Invoke-WebRequest 'https://github.com/obsidianmd/obsidian-releases/releases/download/v1.14.4/Obsidian-1.14.4.exe' -OutFile $installer
+          $folder = Join-Path $env:RUNNER_TEMP 'obsidian-qa-app'
+          & 7z x $installer "-o$folder" -y | Out-Null
+          $archive = Get-ChildItem $folder -Recurse -Filter 'app-64.7z' | Select-Object -First 1
+          if ($archive) { & 7z x $archive.FullName "-o$folder/app" -y | Out-Null }
+          $app = Get-ChildItem $folder -Recurse -Filter 'Obsidian.exe' | Select-Object -First 1
+          if (-not $app) { throw 'Obsidian executable was not extracted' }
+          "OBSIDIAN_EXE=$($app.FullName)" >> $env:GITHUB_ENV
+      - name: Windows native export acceptance
+        if: runner.os == 'Windows'
+        run: node scripts/qa-share-host.mjs
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'Windows'
+        with:
+          name: windows-share-export
+          path: qa-share-output
+          if-no-files-found: warn

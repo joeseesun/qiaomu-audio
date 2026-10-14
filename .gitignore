@@ -3,3 +3,5 @@ node_modules/
 .DS_Store
 *.tmp
 __pycache__/
+
+qa-share-output/

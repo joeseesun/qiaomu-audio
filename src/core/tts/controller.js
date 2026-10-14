@@ -1,4 +1,5 @@
 import { SpeechCache, checkTtsSignal, ttsError } from './providers.js';
+import { estimateMarks, markIndex } from './timing.js';
 
 export class TtsController {
   constructor({ synthesize, makeAudio, speech, makeUtterance, onChange = () => {}, beforePlay = () => {} }) {
@@ -8,10 +9,31 @@ export class TtsController {
   }
   emit() { this.onChange(this); }
   releasePlayer() {
+    this.stopProgress();
     if (this.audio) { this.audio.onended = this.audio.onerror = null; this.audio.pause(); this.audio.removeAttribute('src'); this.audio.load(); this.audio = null; }
     if (this.url) { URL.revokeObjectURL(this.url); this.url = null; }
     if (this.utterance) { this.utterance.onend = this.utterance.onerror = null; this.speech?.cancel(); this.utterance = null; }
   }
+  // Report the word being spoken (item.text offsets) to owners that follow along.
+  startProgress(generation, item, index, result) {
+    this.stopProgress();
+    const audio = this.audio, owner = this.owner;
+    if (!audio || !owner?.onProgress) return;
+    let marks = result.marks, last = -2;
+    const tick = () => {
+      if (generation !== this.generation || audio !== this.audio) { this.stopProgress(); return; }
+      if (!marks && audio.duration > 0 && Number.isFinite(audio.duration)) {
+        const from = result.active?.from ?? 0, to = result.active?.to ?? audio.duration;
+        marks = estimateMarks(item.text, Math.max(0.1, to - from), from);
+      }
+      if (!marks?.length) return;
+      const at = audio.ended ? marks.length - 1 : markIndex(marks, audio.currentTime);
+      if (at === last) return; last = at;
+      owner.onProgress(item, index, at < 0 ? null : { start: marks[at].s, end: marks[at].e });
+    };
+    this.progressTimer = window.setInterval(tick, 40); tick();
+  }
+  stopProgress() { if (this.progressTimer) { window.clearInterval(this.progressTimer); this.progressTimer = null; } }
   stop(owner) {
     if (owner && this.owner !== owner) return;
     ++this.generation; this.abort?.abort(); this.releasePlayer(); this.pending.clear();
@@ -45,6 +67,7 @@ export class TtsController {
     const item = this.items[this.index];
     if (!item) { this.owner?.clearHighlight?.(); this.state = 'ended'; this.emit(); return; }
     this.state = this.paused ? 'paused' : 'loading'; this.emit();
+    let playing = null;
     try {
       const signal = this.abort.signal;
       if (this.profile.id === 'system') {
@@ -57,6 +80,12 @@ export class TtsController {
         utterance.lang = voice?.lang || (/[\u3400-\u9fff]/u.test(item.text) ? 'zh-CN' : 'en-US');
         utterance.rate = this.rate;
         utterance.onend = () => { if (generation === this.generation) void this.advance(generation); };
+        // Web Speech reports word starts only on some voices; the rest simply keep the sentence highlight.
+        utterance.onboundary = event => {
+          if (generation !== this.generation || event.name !== 'word') return;
+          const start = event.charIndex, end = start + (event.charLength || (item.text.slice(start).match(/^[\u3400-\u9fff]|^[\p{L}\p{N}'’-]+/u)?.[0].length ?? 1));
+          this.owner?.onProgress?.(item, this.index, { start, end });
+        };
         utterance.onerror = () => this.fail(ttsError('system'), generation);
         this.utterance = utterance;
         this.utteranceStarted = false;
@@ -73,6 +102,7 @@ export class TtsController {
         audio.src = this.url; audio.playbackRate = this.rate;
         audio.onended = () => { if (generation === this.generation) void this.advance(generation); };
         audio.onerror = () => this.fail(ttsError('playback'), generation);
+        playing = result;
       }
       // Finish page-follow before starting this segment. Overlapping location
       // updates can otherwise be mistaken for the user browsing elsewhere.
@@ -86,6 +116,7 @@ export class TtsController {
       }
       if (generation !== this.generation) return;
       this.state = this.paused ? 'paused' : 'playing';
+      if (playing) this.startProgress(generation, item, this.index, playing);
       this.emit();
       // Local synthesis runs serially in the worker. Keep a small buffer for
       // faster playback; remote services retain one speculative request.

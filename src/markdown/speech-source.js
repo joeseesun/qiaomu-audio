@@ -26,12 +26,12 @@ function wikiDisplay(target) {
 }
 
 class Builder {
-  constructor() { this.text = ''; this.map = []; this.state = { comment: false, html: false }; this.pending = false; }
-  emit(char, offset) { this.text += char; this.map.push(offset); }
+  constructor() { this.text = ''; this.map = []; this.strong = []; this.bold = false; this.state = { comment: false, html: false }; this.pending = false; }
+  emit(char, offset) { this.text += char; this.map.push(offset); this.strong.push(this.bold); }
   // A block boundary becomes a newline (a sentence break for the segmenter).
   breakBlock(offset) {
     if (this.text && !this.text.endsWith('\n')) this.emit('\n', offset);
-    this.pending = false;
+    this.pending = false; this.bold = false;
   }
   softBreak(offset) { if (this.text && !/\s$/.test(this.text)) this.emit(' ', offset); }
   emitRange(text, offset) { for (let i = 0; i < text.length; i++) this.emit(text[i], offset + i); }
@@ -61,7 +61,7 @@ class Builder {
       if ((m = /^<https?:\/\/[^>\s]+>/.exec(rest)) || (m = /^https?:\/\/[^\s<>()]+/.exec(rest))) { i += m[0].length; continue; }
       if ((m = /^<\/?[A-Za-z][^>\n]*>/.exec(rest))) { i += m[0].length; continue; }
       if (s[i] === '#' && (i === 0 || /\s/.test(s[i - 1])) && (m = /^#[\p{L}\p{N}_/-]*[\p{L}_/-][\p{L}\p{N}_/-]*/u.exec(rest))) { i += m[0].length; continue; }
-      if ((m = /^(\*\*|__|~~|==)/.exec(rest))) { i += 2; continue; }
+      if ((m = /^(\*\*|__|~~|==)/.exec(rest))) { if (m[1] !== '~~') this.bold = !this.bold; i += 2; continue; }
       if (s[i] === '*') { i++; continue; }
       if (s[i] === '_' && (!WORD.test(s[i - 1] || '') || !WORD.test(s[i + 1] || ''))) { i++; continue; }
       this.emit(s[i], o + i); i++;
@@ -69,7 +69,8 @@ class Builder {
   }
 }
 
-// Returns { text, map } where map[k] is the source offset of text[k].
+// Returns { text, map, strong } where map[k] is the source offset of text[k] and strong[k] says whether
+// it sits inside **bold** or ==highlight==.
 export function markdownSpeech(source) {
   const b = new Builder(), all = lines(String(source || ''));
   let fence = null, math = false, i = 0, paragraph = false;
@@ -116,12 +117,28 @@ export function markdownSpeech(source) {
     paragraph = !separate;
     if (separate) b.breakBlock(offset + text.length);
   }
-  return { text: b.text, map: b.map };
+  return { text: b.text, map: b.map, strong: b.strong };
+}
+
+// Emphasized [from, to) ranges in part.text coordinates. part.text is the raw slice with whitespace runs
+// collapsed to one space and the ends trimmed, so walk the raw slice with the same rules.
+function strongRanges(text, strong, part) {
+  const ranges = []; let at = 0, open = -1, space = false, started = false;
+  const close = () => { if (open >= 0) { ranges.push([open, at]); open = -1; } };
+  for (let k = part.start; k < part.end; k++) {
+    if (/\s/.test(text[k])) { if (started) space = true; continue; }
+    if (space) { close(); at++; space = false; }
+    if (strong[k] && open < 0) open = at;
+    if (!strong[k]) close();
+    at++; started = true;
+  }
+  close();
+  return ranges;
 }
 
 // Speakable sentences with absolute source offsets [start, end). `from` skips everything before that offset.
 export function markdownChunks(source, { base = 0, from = 0, limit = 240, clauses = false } = {}) {
-  const { text, map } = markdownSpeech(source), chunks = [];
+  const { text, map, strong } = markdownSpeech(source), chunks = [];
   for (const part of splitSpeechText(text, limit, clauses)) {
     let s = part.start, e = part.end - 1;
     while (s <= e && /\s/.test(text[s])) s++;
@@ -129,7 +146,9 @@ export function markdownChunks(source, { base = 0, from = 0, limit = 240, clause
     if (s > e || !WORD.test(part.text)) continue;
     const start = base + map[s], end = base + map[e] + 1;
     if (end <= from) continue;
-    chunks.push({ text: part.text, start, end });
+    const chunk = { text: part.text, start, end }, marked = strongRanges(text, strong, part);
+    if (marked.length) chunk.strong = marked;
+    chunks.push(chunk);
   }
   return chunks;
 }
