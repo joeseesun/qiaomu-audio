@@ -2,7 +2,7 @@ import { Menu, Notice } from 'obsidian';
 import { openVoicePicker, audioSpeechChoiceText } from './speech-choices.js';
 import { voiceChoices } from '../core/tts/choices.js';
 import { localVoiceChoices } from '../runtime/local.js';
-import { markdownChunks } from '../markdown/speech-source.js';
+import { markdownChunks, readingPlan } from '../markdown/speech-source.js';
 import { currentLanguage, errorText, t } from '../i18n.js';
 import { RATES } from '../settings.js';
 import { editorView, rangeVisible, showSpeechRange } from './editor-extension.js';
@@ -26,36 +26,42 @@ export class ReadingManager {
   start(view, mode = 'auto') {
     if (!view?.file || !view.editor) { new Notice(t('notice.noNote')); return; }
     const speech = this.plugin.speech, editor = view.editor, source = editor.getValue(), { limit, clauses } = speech.chunking();
+    if (mode === 'selection' && !editor.somethingSelected()) { new Notice(t('notice.selectText')); return; }
     let items, index = 0;
+    const fingerprint = speechFingerprint(source), progressKey = view.file.path;
+    const selection = editor.somethingSelected() && (mode === 'auto' || mode === 'selection');
     if ((mode === 'auto' || mode === 'selection') && editor.somethingSelected()) {
       const from = editor.posToOffset(editor.getCursor('from')), to = editor.posToOffset(editor.getCursor('to'));
       items = markdownChunks(source.slice(from, to), { base: from, limit, clauses });
     } else {
-      items = markdownChunks(source, { limit, clauses });
       let offset = 0;
       if (mode === 'cursor' || (mode === 'auto' && view.getMode() === 'source')) offset = editor.posToOffset(editor.getCursor());
       else if (mode === 'auto') {
         const line = Math.floor(view.previewMode?.getScroll?.() || 0);
         offset = line > 0 ? editor.posToOffset({ line: Math.min(line, editor.lineCount() - 1), ch: 0 }) : 0;
       }
-      const found = items.findIndex(item => item.end > offset);
-      index = found > 0 ? found : 0;
+      if (mode === 'auto' && offset === 0) offset = resumeOffset(this.plugin.settings.readingProgress, progressKey, fingerprint);
+      ({ items, index } = readingPlan(source, { limit, clauses, offset, exact: mode === 'cursor' }));
     }
-    const fingerprint = speechFingerprint(source), progressKey = view.file.path;
-    const selection = editor.somethingSelected() && (mode === 'auto' || mode === 'selection');
-    if (!selection && mode === 'auto' && index === 0) { const offset = resumeOffset(this.plugin.settings.readingProgress, progressKey, fingerprint); const found = items.findIndex(item => item.end > offset); if (found >= 0) index = found; }
-    if (!items.length) { new Notice(t('notice.emptyText')); return; }
-    this.stop();
-    const session = this.session = { view, file: view.file, items, follow: true, error: null, fingerprint, progressKey, selection };
-    const owner = session.owner = {
+    if (!items.length || index < 0) { new Notice(t(mode === 'cursor' ? 'notice.noTextAfterCursor' : 'notice.emptyText')); return; }
+    // Reuse the mounted bar for jumps in the same note; remounting moves focus
+    // and creates a visible flash at exactly the moment the user seeks.
+    let session = this.session;
+    if (session?.view === view && session.file === view.file) {
+      speech.stopPreview();
+      Object.assign(session, { items, index, follow: true, error: null, fingerprint, selection, dirty: false, completed: false, scrubbing: false });
+    } else {
+      this.stop();
+      session = this.session = { view, file: view.file, items, index, follow: true, error: null, fingerprint, progressKey, selection };
+    }
+    const owner = session.owner ||= {
       view, follow: true,
       clearHighlight: () => showSpeechRange(view, null),
       onSegment: item => this.onSegment(session, item),
     };
-    this.mountBar(session);
-    this.watchScroll(session);
+    if (!session.bar) { this.mountBar(session); this.watchScroll(session); }
     const profile = speech.profile(), problem = speech.configurationError(profile);
-    if (problem) { session.error = problem; this.render(); return; }
+    if (problem) { this.controller.stop(session.owner); session.error = problem; this.render(); return; }
     this.controller.makeAudio = () => new (view.containerEl.ownerDocument.defaultView || window).Audio();
     this.controller.start(owner, items, profile, { index, rate: speech.settings.rate });
   }
@@ -63,7 +69,8 @@ export class ReadingManager {
     if (session !== this.session) return;
     const { view } = session;
     if (view.file !== session.file || !view.containerEl.isConnected) { this.stop(); return; }
-    if (!session.selection) {
+    session.index = this.controller.index;
+    if (!session.selection && !session.dirty) {
       rememberProgress(this.plugin.settings.readingProgress, session.progressKey, session.fingerprint, item.start);
       window.clearTimeout(this.progressTimer); this.progressTimer = window.setTimeout(() => { void this.plugin.saveSettings(); }, 700);
     }
@@ -84,9 +91,9 @@ export class ReadingManager {
   // Scrolling by hand while reading stops following until "Return to reading" is pressed.
   watchScroll(session) {
     const el = session.view.contentEl;
-    const away = () => {
+    const away = event => {
       if (session !== this.session || !session.follow || !this.isPlaying()) return;
-      if (Date.now() - (session.programmatic || 0) < 400) return;
+      if (session.bar.contains(event.target)) return;
       session.follow = false; this.render();
     };
     el.addEventListener('wheel', away, { passive: true });
@@ -100,10 +107,47 @@ export class ReadingManager {
     if (item) this.reveal(session, item);
     this.render();
   }
+  toggleFollow() {
+    if (!this.session) return;
+    if (!this.session.follow) this.returnToReading();
+    else { this.session.follow = false; this.render(); }
+  }
+  readFromCursor() {
+    const session = this.session; if (!session) return;
+    if (session.view.getMode() !== 'source') { new Notice(t('notice.cursorInEditor')); return; }
+    this.start(session.view, session.view.editor.somethingSelected() ? 'selection' : 'cursor');
+  }
+  readFromStart() { if (this.session) this.start(this.session.view, 'start'); }
+  seek(index) {
+    this.plugin.speech.stopPreview();
+    const session = this.session; if (!session || session.error) return;
+    const offset = session.items[index]?.start;
+    if (offset === undefined) return;
+    if (session.dirty) {
+      const paused = this.controller.state === 'paused';
+      const source = session.view.editor.getValue(), options = this.plugin.speech.chunking();
+      const first = session.items[0]?.start || 0, last = session.items.at(-1)?.end || source.length;
+      const items = session.selection ? markdownChunks(source.slice(first, last), { ...options, base: first }) : markdownChunks(source, options);
+      index = items.findIndex(item => item.end > offset);
+      if (index < 0) { new Notice(t('notice.noTextAfterCursor')); return; }
+      session.items = items;
+      session.fingerprint = speechFingerprint(source); session.dirty = false;
+      this.controller.start(session.owner, session.items, this.plugin.speech.profile(), { index, rate: this.plugin.speech.settings.rate, paused });
+    } else this.controller.seek(index);
+    session.index = index;
+    if (this.controller.state === 'paused') {
+      const item = session.items[index];
+      if (!session.selection) { rememberProgress(this.plugin.settings.readingProgress, session.progressKey, session.fingerprint, item.start); void this.plugin.saveSettings(); }
+      showSpeechRange(session.view, { from: item.start, to: item.end });
+      if (session.follow) this.reveal(session, item);
+    }
+    this.render();
+  }
   // Keeps saved offsets on the same words when the note is edited during reading.
   onDocChange(cm, changes) {
     const session = this.session;
     if (!session || editorView(session.view) !== cm) return;
+    session.dirty = true;
     for (const item of session.items) {
       item.start = changes.mapPos(item.start, 1); item.end = Math.max(item.start, changes.mapPos(item.end, -1));
     }
@@ -112,18 +156,19 @@ export class ReadingManager {
     this.plugin.speech.stopPreview();
     const session = this.session; if (!session) return;
     if (session.error) { this.retry(); return; }
-    if (this.controller.state === 'ended') { this.controller.index = 0; this.controller.retry(); return; }
+    if (this.controller.state === 'ended') { if (session.selection) this.seek(0); else this.readFromStart(); return; }
+    if (session.dirty && this.controller.state === 'paused') { this.seek(this.controller.index); }
     this.controller.toggle();
   }
   pause() { if (this.session && BUSY.includes(this.controller.state)) this.controller.toggle(); }
-  skip(delta) { this.plugin.speech.stopPreview(); if (this.session && !this.session.error) this.controller.skip(delta); }
+  skip(delta) { if (this.session) this.seek(Math.max(0, Math.min(this.session.items.length - 1, this.controller.index + delta))); }
   retry() {
     const session = this.session; if (!session) return;
     const profile = this.plugin.speech.profile(), problem = this.plugin.speech.configurationError(profile);
     session.error = problem;
     if (problem) { this.render(); return; }
     if (this.controller.owner === session.owner) { this.controller.profile = { ...profile }; this.controller.cache.clear(); this.controller.retry(); }
-    else this.controller.start(session.owner, session.items, profile, { index: this.controller.owner === session.owner ? this.controller.index : 0, rate: this.plugin.speech.settings.rate });
+    else this.controller.start(session.owner, session.items, profile, { index: session.index, rate: this.plugin.speech.settings.rate });
   }
   // Applies a changed voice or service to the current sentence.
   restartWithSettings() {
@@ -146,6 +191,7 @@ export class ReadingManager {
     showSpeechRange(session.view, null);
     session.unwatch?.(); session.bar?.remove();
     session.barObserver?.disconnect();
+    session.layoutObserver?.disconnect();
     session.view.contentEl.style.removeProperty('--qaudio-player-height');
     session.view.contentEl.removeClass('qaudio-has-bar');
     this.render();
@@ -154,10 +200,11 @@ export class ReadingManager {
   checkWorkspace() {
     const session = this.session; if (!session) return;
     if (!session.view.containerEl.isConnected || session.view.file !== session.file) this.stop();
+    else this.render();
   }
 
   mountBar(session) {
-    const { view } = session, plugin = this.plugin;
+    const { view } = session;
     view.contentEl.addClass('qaudio-has-bar');
     const bar = session.bar = view.contentEl.createDiv({ cls: 'qaudio-bar qaudio-player' });
     const labelId = `qaudio-player-${Date.now().toString(36)}`;
@@ -170,19 +217,45 @@ export class ReadingManager {
     ui.play = iconButton(row, 'play', t('player.play'), () => this.toggle(), { cls: 'qaudio-primary' });
     ui.next = iconButton(row, 'skip-forward', t('player.next'), () => this.skip(1));
     ui.speed = row.createEl('button', { cls: 'qaudio-button qaudio-speed', attr: { type: 'button' } });
+    const speedId = `qaudio-speed-${crypto.randomUUID()}`;
+    bar.createSpan({ cls: 'qaudio-sr', text: t('player.speed'), attr: { id: speedId } }); ui.speed.setAttribute('aria-labelledby', speedId);
     ui.speed.addEventListener('click', event => this.speedMenu(event));
-    ui.follow = iconButton(row, 'locate-fixed', t('player.follow'), () => this.returnToReading(), { text: true, cls: 'qaudio-follow' });
-    ui.settings = iconButton(row, 'settings', t('player.settings'), () => plugin.openSettings());
-    ui.close = iconButton(row, 'x', t('player.close'), () => this.stop());
+    ui.cursor = iconButton(row, 'text-cursor-input', t('cmd.readHere'), () => this.readFromCursor(), { cls: 'qaudio-cursor' });
+    ui.follow = iconButton(row, 'locate-fixed', t('player.follow'), () => this.toggleFollow(), { cls: 'qaudio-follow' });
+    ui.more = iconButton(row, 'ellipsis', t('player.more'), event => this.playbackMenu(event), { cls: 'qaudio-more' });
+    ui.close = iconButton(row, 'x', t('player.close'), () => this.stop(), { cls: 'qaudio-close' });
+    ui.previous.addClass('qaudio-previous'); ui.play.addClass('qaudio-play'); ui.next.addClass('qaudio-next');
+    const footer = bar.createDiv('qaudio-player-footer');
+    ui.state = footer.createSpan({ cls: 'qaudio-player-state', attr: { role: 'status', 'aria-live': 'polite' } });
+    ui.position = footer.createSpan('qaudio-player-position');
+    const seekLabel = bar.createEl('label', { cls: 'qaudio-player-seek' });
+    seekLabel.createSpan({ cls: 'qaudio-sr', text: t('player.seek') });
+    ui.seek = seekLabel.createEl('input', { type: 'range', attr: { min: '1', max: String(session.items.length), step: '1', value: String(session.index + 1) } });
+    ui.seek.addEventListener('input', () => { session.scrubbing = true; ui.position.setText(t('state.position', { index: ui.seek.value, total: session.items.length })); });
+    ui.seek.addEventListener('change', () => { session.scrubbing = false; this.seek(Number(ui.seek.value) - 1); });
+    ui.seek.addEventListener('blur', () => { session.scrubbing = false; this.render(); });
     ui.message = bar.createDiv({ cls: 'qaudio-bar-message', attr: { role: 'status', 'aria-live': 'polite' } });
-    ui.position = bar.createDiv({ cls: 'qaudio-sr', attr: { 'aria-live': 'off' } });
+    // Clicking player controls must leave the editor's caret/selection intact.
+    row.addEventListener('mousedown', event => event.preventDefault());
     const win = bar.ownerDocument.defaultView;
     session.barObserver = new win.ResizeObserver(entries => {
       const height = entries[0]?.borderBoxSize?.[0]?.blockSize;
       if (height && this.session === session) view.contentEl.style.setProperty('--qaudio-player-height', `${height}px`);
     });
     session.barObserver.observe(bar);
+    const layout = () => bar.toggleClass('is-narrow', view.contentEl.clientWidth < 500);
+    session.layoutObserver = new win.ResizeObserver(layout); session.layoutObserver.observe(view.contentEl); layout();
     this.render();
+  }
+  playbackMenu(event) {
+    const session = this.session; if (!session) return;
+    const menu = new Menu();
+    menu.addItem(item => item.setTitle(t('cmd.readHere')).setIcon('text-cursor-input').setDisabled(session.view.getMode() !== 'source').onClick(() => this.start(session.view, 'cursor')));
+    menu.addItem(item => item.setTitle(t('cmd.readStart')).setIcon('rotate-ccw').onClick(() => this.readFromStart()));
+    menu.addItem(item => item.setTitle(t('cmd.readSelection')).setIcon('text-select').setDisabled(!session.view.editor.somethingSelected()).onClick(() => this.start(session.view, 'selection')));
+    menu.addSeparator();
+    menu.addItem(item => item.setTitle(t('player.settings')).setIcon('settings').onClick(() => this.plugin.openSettings()));
+    const box = event.currentTarget.getBoundingClientRect(); menu.showAtPosition({ x: box.left, y: box.top });
   }
   voiceMenu() {
     this.voicePicker?.close();
@@ -198,7 +271,7 @@ export class ReadingManager {
         this.render();
       }));
     }
-    menu.showAtMouseEvent(event);
+    const box = event.currentTarget.getBoundingClientRect(); menu.showAtPosition({ x: box.left, y: box.top });
   }
   voiceLabel() {
     const profile = this.plugin.speech.profile();
@@ -209,21 +282,36 @@ export class ReadingManager {
   }
   render() {
     const session = this.session, c = this.controller;
-    if (session && !session.selection && c.owner === session.owner && c.state === 'ended') { rememberProgress(this.plugin.settings.readingProgress, session.progressKey, session.fingerprint, 0, true); void this.plugin.saveSettings(); }
+    if (session && !session.completed && !session.selection && !session.dirty && c.owner === session.owner && c.state === 'ended') { session.completed = true; rememberProgress(this.plugin.settings.readingProgress, session.progressKey, session.fingerprint, 0, true); void this.plugin.saveSettings(); }
     const state = !session ? 'idle' : session.error ? 'error' : c.owner === session.owner ? c.state : 'idle';
     this.status.toggleClass('qaudio-hidden', !session);
-    if (session) this.status.setText(`${state === 'playing' || state === 'loading' ? '▶' : '❚❚'} ${t(state === 'playing' || state === 'loading' ? 'status.reading' : 'status.paused')}`);
+    if (session) this.status.setText(t(`state.${state === 'error' ? 'paused' : state}`));
     if (!session?.ui) return;
     const ui = session.ui, playing = state === 'playing' || state === 'loading';
-    ui.play.setIconName(playing ? 'pause' : 'play'); ui.play.setLabel(t(playing ? 'player.pause' : 'player.play'));
+    const icon = playing ? 'pause' : state === 'ended' || state === 'error' ? 'rotate-ccw' : 'play';
+    if (ui.play.dataset.icon !== icon) { ui.play.setIconName(icon); ui.play.dataset.icon = icon; }
+    ui.play.setLabel(t(playing ? 'player.pause' : state === 'ended' ? 'player.replay' : state === 'error' ? 'player.retry' : 'player.play'));
     ui.play.toggleClass('is-loading', state === 'loading');
     ui.speed.setText(`${this.plugin.speech.settings.rate}×`);
     ui.voice.setLabel(this.voiceLabel());
-    ui.follow.toggleClass('qaudio-hidden', session.follow || !playing);
-    ui.previous.disabled = ui.next.disabled = !!session.error;
-    if (c.owner === session.owner && c.items.length) ui.position.setText(t('state.position', { index: c.index + 1, total: c.items.length }));
-    ui.message.empty();
+    ui.follow.setAttribute('aria-pressed', String(session.follow));
+    ui.follow.setLabel(t(session.follow ? 'player.unfollow' : 'player.follow'));
+    const index = c.owner === session.owner ? Math.min(c.index, session.items.length - 1) : session.index;
+    ui.previous.disabled = !!session.error || index <= 0;
+    ui.next.disabled = !!session.error || index >= session.items.length - 1;
+    ui.cursor.disabled = session.view.getMode() !== 'source';
+    ui.cursor.setLabel(t(session.view.editor.somethingSelected() ? 'cmd.readSelection' : 'cmd.readHere'));
+    ui.seek.max = String(session.items.length); ui.seek.disabled = !!session.error || session.items.length < 2;
+    if (!session.scrubbing) {
+      ui.position.setText(t('state.position', { index: index + 1, total: session.items.length }));
+      ui.seek.value = String(index + 1);
+      ui.seek.setAttribute('aria-valuetext', ui.position.textContent);
+    }
+    ui.state.setText(`${t(state === 'error' ? 'state.failed' : `state.${state}`)}${session.selection ? ` · ${t('player.selection')}` : ''}`);
     const error = session.error || (state === 'error' ? c.error : null);
+    const messageKey = error ? `error:${errorText(error, this.plugin.speech.settings.provider)}` : !this.plugin.settings.tts.welcomed && this.plugin.speech.settings.provider === 'edge' ? 'welcome' : '';
+    if (session.messageKey === messageKey) return;
+    session.messageKey = messageKey; ui.message.empty();
     if (error) {
       ui.message.createSpan({ text: errorText(error, this.plugin.speech.settings.provider) });
       const actions = ui.message.createSpan('qaudio-message-actions');
@@ -234,7 +322,7 @@ export class ReadingManager {
       iconButton(ui.message.createSpan('qaudio-message-actions'), 'check', t('player.gotIt'), async () => {
         this.plugin.settings.tts.welcomed = true; await this.plugin.saveSettings(); this.render();
       }, { text: true });
-    } else if (state === 'loading' || state === 'ended') ui.message.setText(t(`state.${state}`));
+    }
     ui.message.toggleClass('qaudio-hidden', !ui.message.hasChildNodes() && !ui.message.textContent);
   }
   dispose() { this.stop(); this.unsubscribe(); }

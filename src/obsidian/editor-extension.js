@@ -21,8 +21,11 @@ const speechField = StateField.define({
 });
 
 // Document edits are forwarded so reading and dictation sessions can map their saved offsets.
-export function audioEditorExtension(onChange) {
-  return [speechField, EditorView.updateListener.of(update => { if (update.docChanged) onChange(update.view, update.changes); })];
+export function audioEditorExtension(onChange, onSelectionChange = () => {}) {
+  return [speechField, EditorView.updateListener.of(update => {
+    if (update.docChanged) onChange(update.view, update.changes);
+    if (update.selectionSet) onSelectionChange(update.view);
+  })];
 }
 export function editorView(markdownView) { return markdownView?.editor?.cm || null; }
 export function showSpeechRange(markdownView, range) {
@@ -35,5 +38,6 @@ export function rangeVisible(markdownView, from) {
   const cm = editorView(markdownView);
   if (!cm || !cm.dom.isConnected) return true;
   const box = cm.scrollDOM.getBoundingClientRect(), at = cm.coordsAtPos(Math.min(from, cm.state.doc.length));
-  return !!at && at.top >= box.top && at.bottom <= box.bottom - 72;
+  const bar = markdownView.contentEl.querySelector('.qaudio-player')?.getBoundingClientRect();
+  return !!at && at.top >= box.top && at.bottom <= Math.min(box.bottom, bar?.top ?? box.bottom - 72) - 12;
 }

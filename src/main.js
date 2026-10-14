@@ -5,7 +5,7 @@ import { normalizeSettings, getSecret, setSecret, ttsSecretId, migrateAsrSecrets
 import { SpeechService, hiddenProvider } from './speech.js';
 import { TranscriptionService } from './transcription.js';
 import { createLocalTtsManager } from './runtime/local.js';
-import { audioEditorExtension } from './obsidian/editor-extension.js';
+import { audioEditorExtension, editorView } from './obsidian/editor-extension.js';
 import { ReadingManager } from './obsidian/reading.js';
 import { DictationManager } from './obsidian/dictation.js';
 import { AudioSettingTab } from './obsidian/settings-tab.js';
@@ -26,7 +26,7 @@ export default class QiaomuAudioPlugin extends Plugin {
     this.dictation = new DictationManager(this);
     this.registerEditorExtension(audioEditorExtension((cm, changes) => {
       this.reading.onDocChange(cm, changes); this.dictation.onDocChange(cm, changes);
-    }));
+    }, cm => { if (editorView(this.reading.session?.view) === cm) this.reading.render(); }));
     this.registerCommands();
     this.registerEvent(this.app.workspace.on('editor-menu', (menu, editor, info) => {
       const view = info instanceof MarkdownView ? info : this.activeView();
@@ -66,7 +66,8 @@ export default class QiaomuAudioPlugin extends Plugin {
     setting.open(); setting.openTabById(this.manifest.id);
   }
   readAloud(view) {
-    if (this.reading.session?.view === view) this.reading.toggle();
+    if (view.editor.somethingSelected()) this.reading.start(view, 'selection');
+    else if (this.reading.session?.view === view) this.reading.toggle();
     else this.reading.start(view, 'auto');
   }
   // Two header buttons on every Markdown note: read aloud and dictate.
@@ -86,6 +87,11 @@ export default class QiaomuAudioPlugin extends Plugin {
     const whenReading = run => checking => { if (!this.reading.isActive()) return false; if (!checking) run(); return true; };
     this.addCommand({ id: 'read-aloud', name: t('cmd.read'), icon: 'volume-2', checkCallback: withView(view => this.readAloud(view)) });
     this.addCommand({ id: 'read-from-start', name: t('cmd.readStart'), icon: 'volume-2', checkCallback: withView(view => this.reading.start(view, 'start')) });
+    this.addCommand({ id: 'read-from-cursor', name: t('cmd.readHere'), icon: 'text-cursor-input', checkCallback: checking => {
+      const view = this.activeView(); if (!view || view.getMode() !== 'source') return false;
+      if (!checking) this.reading.start(view, 'cursor'); return true;
+    } });
+    this.addCommand({ id: 'return-to-reading', name: t('player.follow'), icon: 'locate-fixed', checkCallback: whenReading(() => this.reading.returnToReading()) });
     this.addCommand({ id: 'read-selection', name: t('cmd.readSelection'), icon: 'volume-2', editorCheckCallback: (checking, editor, info) => {
       if (!editor.somethingSelected()) return false;
       const view = info instanceof MarkdownView ? info : this.activeView();

@@ -77,6 +77,23 @@ function harness(synthesize) {
   return { c, audios, states };
 }
 const audio = () => ({ bytes: new Uint8Array([1, 2, 3]), mime: 'audio/mpeg' });
+test('sentence navigation while paused stays paused and defers synthesis until resume', async () => {
+  const calls = [], { c, audios } = harness(async (_p, text) => { calls.push(text); return audio(); });
+  c.start({}, ['one', 'two', 'three'].map(text => ({ text })), { id: 'openai' }); await tick();
+  c.pause(); const before = calls.length, plays = audios.reduce((n, a) => n + a.plays, 0);
+  c.skip(1); await tick();
+  assert.equal(c.state, 'paused'); assert.equal(c.index, 1); assert.equal(calls.length, before);
+  assert.equal(audios.reduce((n, a) => n + a.plays, 0), plays);
+  c.seek(2); assert.equal(c.state, 'paused');
+  c.toggle(); await tick(); assert.equal(c.state, 'playing'); assert.equal(c.index, 2); c.dispose();
+});
+test('seeking supersedes an in-flight request and ignores its late result', async () => {
+  let finish; const { c, audios } = harness(async (_p, text) => text === 'old' ? new Promise(resolve => { finish = resolve; }) : audio());
+  c.start({}, [{ text: 'old' }, { text: 'new' }], { id: 'openai' });
+  c.seek(1); await tick(); finish(audio()); await tick();
+  assert.equal(c.index, 1); assert.equal(c.state, 'playing'); assert.equal(audios.length, 1);
+  c.seek(0, { paused: true }); assert.equal(c.state, 'paused'); c.dispose();
+});
 test('switching books cannot play an older late synthesis result', async () => {
   let resolveOld;
   const { c, audios } = harness(async (_p, text) => text === 'old' ? new Promise(r => { resolveOld = r; }) : audio());

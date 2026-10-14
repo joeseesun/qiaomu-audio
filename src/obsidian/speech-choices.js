@@ -5,6 +5,7 @@ import { t } from '../i18n.js';
 import { TTS_PROVIDERS } from '../core/tts/providers.js';
 import { hiddenProvider } from '../speech.js';
 import { iconButton } from './ui.js';
+import { applySpeechChoice, speechChoiceKey } from '../core/tts/recent.js';
 
 // Shared by Audio and RSS. Based on Reader's SpeechChoices: scope voices by model,
 // load native voices immediately, fence late catalogs, and preserve reading while auditioning.
@@ -27,9 +28,17 @@ export class SpeechChoices {
     await this.onChange(key); if (!this.disposed) this.render();
   }
   async provider(id) {
-    this.abort?.abort(); this.host.speech.stopPreview(); this.host.speech.controller.pause();
+    this.abort?.abort(); this.host.speech.stopPreview();
     this.host.settings.tts.provider = id; this.nativeAttempted = false; this.message = '';
     await this.onChange('provider'); if (!this.disposed) this.render();
+  }
+  async recent(value) {
+    this.abort?.abort(); this.host.speech.stopPreview();
+    const previous = this.host.settings.tts.profiles[value.id];
+    if (previous?.baseUrl !== value.baseUrl || previous?.region !== value.region) delete this.host.voiceCatalogs[value.id];
+    if (!applySpeechChoice(this.host.settings.tts, value)) return;
+    this.nativeAttempted = false; this.message = '';
+    await this.onChange('recent'); if (!this.disposed) this.render();
   }
   field(name, key, values, custom, parent = this.parent) {
     const value = this.host.speech.profile()[key] || '', choices = uniqueChoices(values);
@@ -94,6 +103,7 @@ class VoicePicker extends Modal {
     this.services = this.contentEl.createDiv('qaudio-voice-services'); this.models = this.contentEl.createDiv('qaudio-voice-models');
     const search = this.contentEl.createEl('label', { cls: 'qaudio-voice-search' }); search.createSpan({ cls: 'qaudio-sr', text: tx('search') });
     const input = search.createEl('input', { type: 'search', attr: { placeholder: tx('search') } });
+    this.recent = this.contentEl.createDiv('qaudio-voice-recent');
     this.list = this.contentEl.createDiv('qaudio-voice-list');
     const status = this.contentEl.createDiv({ attr: { role: 'status', 'aria-live': 'polite' } });
     const render = () => {
@@ -108,6 +118,22 @@ class VoicePicker extends Modal {
       if (id === 'localModel') this.choices.field(tx('model'), 'model', LOCAL_MODELS.map(model => ({ id: model.id, label: model.label })), false, this.models);
       else if (TTS_MODELS[id]) this.choices.field(tx(id === 'doubao' ? 'resource' : 'model'), modelKey(profile), [...TTS_MODELS[id], ...(host.voiceCatalogs[id]?.models || [])], true, this.models);
       const voices = host.speech.choices(host.speech.profile(), this.choices.options());
+      this.recent.empty();
+      const recent = (host.settings.tts.recent || []).filter(entry => !hiddenProvider(entry.id, '')).slice(0, 8);
+      if (recent.length && !input.value.trim()) {
+        const heading = this.recent.createDiv('qaudio-recent-heading'); heading.createSpan({ text: tx('recent') });
+        iconButton(heading, 'x', tx('clearRecent'), async () => { host.settings.tts.recent = []; await host.saveSettings(); render(); });
+        for (const entry of recent) {
+          const row = this.recent.createDiv('qaudio-voice-row');
+          const provider = TTS_PROVIDERS[entry.id];
+          const voice = host.speech.choices(entry, this.choices.options()).find(choice => choice.id === entry.voice)?.label || entry.voice || tx('automatic');
+          const model = entry.model || entry.resourceId || '';
+          const label = `${voice} · ${['system', 'macos', 'localModel'].includes(entry.id) ? tx(entry.id) : provider.label}${model ? ` · ${model}` : ''}`;
+          const selected = speechChoiceKey(entry) === speechChoiceKey(profile);
+          const choose = iconButton(row, selected ? 'check' : 'history', label, async () => { await this.choices.recent(entry); if (this.contentEl.isConnected) render(); }, { text: true });
+          choose.setAttribute('aria-pressed', String(selected));
+        }
+      }
       this.list.empty(); const query = input.value.toLocaleLowerCase().trim(), selected = host.speech.profile().voice;
       const filtered = voices.filter(voice => `${voice.label} ${voice.id}`.toLocaleLowerCase().includes(query));
       for (const voice of filtered) {
@@ -130,7 +156,7 @@ class VoicePicker extends Modal {
 }
 
 export function audioSpeechChoiceText(key) {
-  return t(({ service: 'settings.service', system: 'tts.provider.system', macos: 'tts.provider.macos', localModel: 'tts.provider.localModel', settings: 'player.settings', automatic: 'tts.systemVoice', model: 'settings.model', resource: 'settings.resourceId', voice: 'settings.voice', picker: 'tts.voicePicker', search: 'tts.voiceSearch', custom: 'settings.custom', refresh: 'settings.refreshVoices', loading: 'state.loading', loaded: 'settings.catalogReady', partial: 'settings.catalogPartial', preview: 'settings.preview', sample: 'tts.sample', empty: 'tts.noVoices', verified: 'state.verified', paused: 'state.paused', macHelp: 'tts.macSystemHelp', unavailable: 'tts.unavailableVoice', recommended: 'tts.recommended', voicePremium: 'tts.voicePremium', voiceEnhanced: 'tts.voiceEnhanced', voiceDisplayName: 'tts.voiceDisplayName' })[key] || key);
+  return t(({ service: 'settings.service', system: 'tts.provider.system', macos: 'tts.provider.macos', localModel: 'tts.provider.localModel', settings: 'player.settings', automatic: 'tts.systemVoice', model: 'settings.model', resource: 'settings.resourceId', voice: 'settings.voice', picker: 'tts.voicePicker', search: 'tts.voiceSearch', custom: 'settings.custom', refresh: 'settings.refreshVoices', loading: 'state.loading', loaded: 'settings.catalogReady', partial: 'settings.catalogPartial', preview: 'settings.preview', sample: 'tts.sample', empty: 'tts.noVoices', verified: 'state.verified', paused: 'state.paused', macHelp: 'tts.macSystemHelp', unavailable: 'tts.unavailableVoice', recommended: 'tts.recommended', voicePremium: 'tts.voicePremium', voiceEnhanced: 'tts.voiceEnhanced', voiceDisplayName: 'tts.voiceDisplayName', recent: 'tts.recent', clearRecent: 'tts.clearRecent' })[key] || key);
 }
 export function openVoicePicker(host, options) {
   const panel = host.app.workspace.containerEl.ownerDocument.createElement('div');

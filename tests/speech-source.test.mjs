@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { lineOfOffset, markdownChunks, markdownSpeech } from '../src/markdown/speech-source.js';
+import { lineOfOffset, markdownChunks, markdownSpeech, readingPlan } from '../src/markdown/speech-source.js';
 
 const spoken = source => markdownChunks(source).map(c => c.text);
 const spans = source => markdownChunks(source).map(c => source.slice(c.start, c.end));
@@ -54,4 +54,24 @@ test('map length equals text length; empty and symbol-only notes give nothing', 
 test('unclosed fences and comments do not leak hidden text', () => {
   assert.deepEqual(spoken('可读。\n```\n代码'), ['可读。']);
   assert.deepEqual(spoken('可读。%% 开始\n还在注释\n%%后面'), ['可读。', '后面']);
+});
+
+test('explicit cursor restart begins at the requested character inside formatted text', () => {
+  const source = '第一句。这里有**指定起点**和[可见文字](https://hidden.invalid)。最后一句。';
+  const offset = source.indexOf('指定'), plan = readingPlan(source, { offset, exact: true });
+  assert.equal(plan.index, 1);
+  assert.equal(plan.items[plan.index].text, '指定起点和可见文字。');
+  assert.equal(plan.items[plan.index].start, offset);
+  assert.equal(plan.items[0].text, '第一句。');
+  assert.equal(readingPlan(source, { offset }).items[1].text, '这里有指定起点和可见文字。');
+});
+
+test('cursor in hidden Markdown advances to readable text; EOF never restarts the note', () => {
+  const source = '---\ntitle: private\n---\n开头。\n```js\nsecret\n```\n后面。';
+  for (const word of ['private', 'secret']) {
+    const plan = readingPlan(source, { offset: source.indexOf(word), exact: true });
+    assert.equal(plan.items[plan.index].text, word === 'private' ? '开头。' : '后面。');
+  }
+  assert.equal(readingPlan(source, { offset: source.length, exact: true }).index, -1);
+  assert.equal(readingPlan('最后一句。', { offset: 4, exact: true }).index, -1);
 });
