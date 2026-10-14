@@ -92,7 +92,7 @@ export class ReadingManager {
   watchScroll(session) {
     const el = session.view.contentEl;
     const away = event => {
-      if (session !== this.session || !session.follow || !this.isPlaying()) return;
+      if (session !== this.session || !session.follow) return;
       if (session.bar.contains(event.target)) return;
       session.follow = false; this.render();
     };
