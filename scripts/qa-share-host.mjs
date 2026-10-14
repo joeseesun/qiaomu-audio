@@ -73,8 +73,10 @@ async function acceptance(output) {
     if (generated.files.filter(f => f.kind === 'video').length !== 2 || !generated.files.some(f => f.kind === 'image')) throw Error('Video outputs missing');
     const files = await p.share.save(generated.files, 'Export QA.md'); video = { supported: true, files: files.map(f => ({ name: f.name, bytes: f.bytes.length })) };
   } catch (e) { if (e.code !== 'videoUnsupported') throw e; video = { supported: false, code: e.code, message: p.share.failed(e, profile), mp3FallbackPassed: true }; }
+  const slider = modal.querySelector('input[type=range]'); const style = getComputedStyle(slider);
+  const sliderStyle = { inline: slider.getAttribute('style'), background: style.background, track: getComputedStyle(slider, '::-webkit-slider-runnable-track').background, variables: Object.fromEntries([...style].filter(k => k.startsWith('--slider')).map(k => [k, style.getPropertyValue(k)])) };
   if (errors.length) throw Error(JSON.stringify(errors));
-  return { os: process.platform, versions: process.versions, installerVersion: require('electron').remote.app.getVersion(), pluginVersion: p.manifest.version, synthesizedVoice: false, mp3: true, srt: true, speed: 1.5, customFolder: true, collision: true, command: true, video, errors };
+  return { os: process.platform, versions: process.versions, installerVersion: require('electron').remote.app.getVersion(), pluginVersion: p.manifest.version, synthesizedVoice: false, mp3: true, srt: true, speed: 1.5, customFolder: true, collision: true, command: true, sliderStyle, video, errors };
 }
 
 /* eslint-enable @typescript-eslint/no-require-imports -- End desktop QA bridge. */

@@ -406,7 +406,7 @@ button.qaudio-follow { color: var(--text-normal); }
 }
 
 /* Share: export as audio or video */
-.qaudio-share { --interactive-accent: var(--qaudio-ink); --interactive-accent-hover: var(--qaudio-ink); --slider-track-background: var(--qaudio-line); --checkbox-color: var(--qaudio-ink); --checkbox-color-hover: var(--qaudio-ink); }
+.qaudio-share { --interactive-accent: var(--qaudio-ink); --interactive-accent-hover: var(--qaudio-ink); --slider-track-background: var(--qaudio-line); --slider-fill-background: var(--qaudio-ink); --slider-thumb-shadow-focus: none; --checkbox-color: var(--qaudio-ink); --checkbox-color-hover: var(--qaudio-ink); }
 .qaudio-share .checkbox-container.is-enabled { background-color: var(--qaudio-ink); }
 .qaudio-share .checkbox-container.is-enabled::after { background-color: var(--qaudio-paper); }
 .qaudio-share input[type="range"] { accent-color: var(--qaudio-ink); }
