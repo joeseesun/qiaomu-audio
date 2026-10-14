@@ -1,6 +1,6 @@
 # 乔木语音 Qiaomu Audio
 
-在任意 Obsidian 笔记里点一下就朗读；按一下麦克风说话，文字自动写进笔记。
+把笔记导出为音频或字幕视频；点一下朗读，按一下麦克风把说话写进笔记。
 
 Read any Obsidian note aloud with one click, and dictate speech straight into your notes.
 
@@ -8,7 +8,7 @@ Read any Obsidian note aloud with one click, and dictate speech straight into yo
 
 ## 安装
 
-1.0.1 已完成官方自动扫描并公开目录网页。客户端索引同步后，可在第三方插件中搜索 **Qiaomu Audio**，或在官方页面点击 **Add to Obsidian**；当前索引验收结果见[发布记录](docs/release-evidence-1.0.1.md)。手动安装时，把发布页的 `main.js`、`manifest.json` 和 `styles.css` 放进 `<笔记库>/.obsidian/plugins/qiaomu-audio/`，然后启用插件。
+在第三方插件中搜索 **Qiaomu Audio**，或在[官方页面](https://community.obsidian.md/plugins/qiaomu-audio)点击 **Add to Obsidian**。1.1.0 已完成官方自动审核，并在隔离的 macOS Obsidian 1.14.4 库中验证了社区搜索、安装和启用。官方仍标注未经工作人员人工审核；详细证据见[发布记录](docs/release-evidence-1.1.0.md)。手动安装时，把发布页的 `main.js`、`manifest.json` 和 `styles.css` 放进 `<笔记库>/.obsidian/plugins/qiaomu-audio/`，然后启用插件。
 
 ## 朗读
 
