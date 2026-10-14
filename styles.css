@@ -406,6 +406,12 @@ button.qaudio-follow { color: var(--text-normal); }
 }
 
 /* Share: export as audio or video */
+.qaudio-share { --interactive-accent: var(--qaudio-ink); --interactive-accent-hover: var(--qaudio-ink); --slider-track-background: var(--qaudio-line); --checkbox-color: var(--qaudio-ink); --checkbox-color-hover: var(--qaudio-ink); }
+.qaudio-share .checkbox-container.is-enabled { background-color: var(--qaudio-ink); }
+.qaudio-share .checkbox-container.is-enabled::after { background-color: var(--qaudio-paper); }
+.qaudio-share input[type="range"] { accent-color: var(--qaudio-ink); }
+.qaudio-share :is(button, select, input, summary, a, .checkbox-container):focus-visible { outline: 1px solid var(--qaudio-ink); outline-offset: 2px; box-shadow: none; }
+.qaudio-share progress { accent-color: var(--qaudio-ink); }
 .qaudio-share-modal { width: min(560px, 94vw); max-height: 90vh; display: flex; flex-direction: column; }
 .qaudio-share-modal .modal-content.qaudio-share { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .qaudio-modal .qaudio-hidden.qaudio-hidden { display: none; }

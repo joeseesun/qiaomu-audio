@@ -1,3 +1,5 @@
+// Browser timer shim for this Node-only controller test.
+globalThis.window ||= globalThis;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { alignWords, estimateMarks, markIndex, activeRange } from '../src/core/tts/timing.js';

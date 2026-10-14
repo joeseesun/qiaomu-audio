@@ -1,6 +1,6 @@
 {
   "name": "qiaomu-audio",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "description": "在任意 Obsidian 笔记里一键朗读，按一下说话自动转成文字。",
   "main": "main.js",
   "type": "module",
@@ -52,5 +52,8 @@
       "types": "./src/shared.d.ts",
       "default": "./src/shared/progress.js"
     }
+  },
+  "overrides": {
+    "moment": "2.31.0"
   }
 }

@@ -31,9 +31,9 @@ export class TtsController {
       if (at === last) return; last = at;
       owner.onProgress(item, index, at < 0 ? null : { start: marks[at].s, end: marks[at].e });
     };
-    this.progressTimer = setInterval(tick, 40); tick();
+    this.progressTimer = window.setInterval(tick, 40); tick();
   }
-  stopProgress() { if (this.progressTimer) { clearInterval(this.progressTimer); this.progressTimer = null; } }
+  stopProgress() { if (this.progressTimer) { window.clearInterval(this.progressTimer); this.progressTimer = null; } }
   stop(owner) {
     if (owner && this.owner !== owner) return;
     ++this.generation; this.abort?.abort(); this.releasePlayer(); this.pending.clear();

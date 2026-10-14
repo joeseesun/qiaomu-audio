@@ -12,3 +12,13 @@ The player supports listening while reading, selecting text and taking notes. Ke
 - Spacing uses 4/6/10/12/16 CSS pixels; the player keeps 10-pixel insets and a 22-pixel status row. Error actions, long voice names, long recent labels and narrow notes must remain within bounds. No layout animation.
 
 Verification covers real Obsidian rendering in light/dark, wide/narrow panes, stable bounds across sentence transitions, exact caret restart, selection scope, paused seeking, rapid cancellation, settings reload and recent restoration. Desktop narrow simulation does not establish mobile hardware support.
+
+# Share
+
+Export the current selection, section(s) or complete note through one dialog. Use the established neutral ink/paper palette, system UI font, Lucide actions, hidden accessible names and visible focus; do not create hover tooltips. A few format, orientation and visual-style choices use chips. The scope selector accommodates dynamic headings; multi-section choices remain visible when needed.
+
+Start with a useful audio/short-video/wide-video preset, text count/duration estimate, current voice and speed. Reuse speech settings and recent voices; do not ask for another key. Fold text editing and optional titles, sidecar subtitles, still cover, embedding and destination. Paid/long exports show a specific cost/time warning. Preview is generated locally and does not imply that synthesis is connected.
+
+Keep generation phases and cancel visible. Closing cancels pending synthesis/encoding. Failures retain the input and show the recovery reason. Success lists actual files, sizes and reveal actions; another export reuses the choices. Save preferences after a successful export. Default destination follows Obsidian attachments, with optional desktop folder browsing/absolute path; avoid overwrites by numbering collisions. Insertion is optional and applies to the connected note editor after generation.
+
+Video owns its subtitle/word-emphasis timeline, independent of reading highlights. Support 1080×1920 and 1920×1080 with the same content hierarchy, four pluggable visual styles and optional cover/outro; platform circles are not brand logos. Check WebCodecs at runtime, offer MP3 on unsupported desktops, and hide video/custom system folders on mobile. Actual Windows/macOS results and untested hardware are reported separately.
