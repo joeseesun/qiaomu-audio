@@ -74,7 +74,7 @@ export class ShareManager {
     const cover = (wantsVideo || options.coverImage) && options.cover ? { image: background } : null;
     try {
       return await runExport({
-        items, speed: options.speed, title, caption, artist: share.name || '', baseName: fileBase(title), cover, outro, signal, onProgress,
+        items, speed: options.speed, title, caption, artist: share.name || '', baseName: fileBase(title), cover, outro, visual: options.visual, avatar, signal, onProgress,
         outputs: { mp3: options.format === 'mp3', srt: options.srt, cover: options.coverImage && !!cover, videos },
       }, { synthesize: (item, abort) => this.synthesize(profile, item, abort), decode: bytes => this.decode(bytes), concurrency: 2, doc: activeDocument,
         makeContext: (w, h) => makeCanvas(w, h, activeDocument).getContext('2d') });

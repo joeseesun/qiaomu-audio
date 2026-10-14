@@ -373,5 +373,10 @@ export const STRINGS = {
   'error.folderInvalid': ['导出文件夹需要是完整路径（如 /Users/名字/Movies），请在设置里修改。', 'The export folder must be a full path (like /Users/name/Movies). Change it in settings.'],
   'error.folderWrite': ['无法写入导出文件夹，请检查路径和权限，或在设置里恢复默认位置。', 'Cannot write to the export folder. Check the path and permissions, or reset it in settings.'],
   'error.folderDesktop': ['导出到自定义文件夹仅支持电脑端。', 'Custom export folders need the desktop app.'],
+  'share.visual': ['画面风格', 'Visual style'],
+  'share.visual.spectrum': ['频谱', 'Spectrum'],
+  'share.visual.ring': ['圆环', 'Ring'],
+  'share.visual.wave': ['实时波形', 'Live waveform'],
+  'share.visual.bars': ['响度条', 'Loudness bars'],
 };
 

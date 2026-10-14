@@ -4,6 +4,9 @@ import { SHARE_SPEEDS } from '../settings.js';
 import { outroAccounts } from '../core/share/brand.js';
 import { characterCount, estimateSeconds } from '../core/share/scope.js';
 import { FPS, buildScene, drawContent, drawCover, drawOutro } from '../core/share/scene.js';
+import { analyse } from '../core/share/analysis.js';
+import { STYLE_IDS, styleNeeds } from '../core/share/styles.js';
+import { SAMPLE_RATE } from '../core/share/audio.js';
 import { estimateMarks } from '../core/tts/timing.js';
 import { providerLabel } from '../speech.js';
 import { audioSpeechChoiceText, openVoicePicker } from './speech-choices.js';
@@ -16,6 +19,18 @@ const PRESETS = [
   { id: 'audio', format: 'mp3', videos: ['portrait'] },
 ];
 const phaseWeights = (speed, video) => ({ voice: 0.5, speed: speed ? 0.06 : 0, audio: video ? 0 : 0.1, video: video ? 0.4 : 0 });
+// A voice-like signal (harmonics with a moving pitch and syllable-like swells) so previews of the
+// frequency styles look like speech before anything has been synthesized.
+function sampleVoice(seconds) {
+  const pcm = new Float32Array(Math.round(seconds * SAMPLE_RATE)); let phase = 0;
+  for (let i = 0; i < pcm.length; i++) {
+    const time = i / SAMPLE_RATE, f0 = 150 + 45 * Math.sin(2 * Math.PI * 0.6 * time), swell = Math.max(0, Math.sin(2 * Math.PI * 2.4 * time)) ** 1.5;
+    phase += 2 * Math.PI * f0 / SAMPLE_RATE; let v = 0;
+    for (let h = 1; h <= 10; h++) v += Math.sin(h * phase) / h ** 1.1;
+    pcm[i] = 0.22 * swell * v;
+  }
+  return pcm;
+}
 const size = bytes => (bytes > 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 
 // One dialog: pick what to export, how it should sound and look, then make the files.
@@ -25,7 +40,7 @@ export class ShareModal extends Modal {
     this.manager = manager; this.context = context; this.plugin = manager.plugin;
     const saved = this.plugin.settings.share, desktop = manager.canMakeVideo();
     this.s = { scope: context.scopes[0].id, picked: new Set(), edited: null, title: null, format: desktop ? saved.format : 'mp3', videos: new Set(saved.videos), speed: saved.speed,
-      cover: saved.cover, outro: saved.outro, srt: saved.srt, coverImage: saved.coverImage, embed: saved.embed };
+      visual: saved.visual, cover: saved.cover, outro: saved.outro, srt: saved.srt, coverImage: saved.coverImage, embed: saved.embed };
     this.images = {}; this.busy = false;
   }
   get speech() { return this.manager.speech; }
@@ -131,6 +146,8 @@ export class ShareModal extends Modal {
       if (this.s.videos.has(id)) { if (this.s.videos.size > 1) this.s.videos.delete(id); } else this.s.videos.add(id);
       this.refresh({ keepText: true, keepPicker: true });
     });
+    this.visualSetting = new Setting(this.videoBlock).setName(t('share.visual'));
+    this.visualRow = this.chips(this.visualSetting.controlEl, STYLE_IDS.map(id => ({ id, label: t(`share.visual.${id}`) })), id => this.s.visual === id, id => { this.s.visual = id; this.schedulePreview(); });
     new Setting(this.videoBlock).setName(t('share.cover')).addToggle(toggle => toggle.setValue(this.s.cover).onChange(value => { this.s.cover = value; this.schedulePreview(); }));
     this.outroSetting = new Setting(this.videoBlock).setName(t('share.outro'));
     this.outroSetting.addToggle(toggle => { this.outroToggle = toggle; toggle.setValue(this.s.outro && this.hasSignature()).setDisabled(!this.hasSignature()).onChange(value => { this.s.outro = value; this.schedulePreview(); }); });
@@ -185,7 +202,7 @@ export class ShareModal extends Modal {
     this.makeButton.disabled = this.busy || !items.length;
     this.voiceSetting.setDesc(this.voiceText());
     this.speedNote.setText(this.s.speed === 1 ? '' : t('share.speedNote'));
-    this.presetRow.paint(); this.formatRow.paint(); this.shapeRow.paint();
+    this.presetRow.paint(); this.formatRow.paint(); this.shapeRow.paint(); this.visualRow.paint();
     this.videoBlock.toggleClass('qaudio-hidden', !video);
     this.videoNote.setText(this.desktop ? '' : t('share.videoDesktop'));
     this.formatSetting.setDesc(this.desktop ? '' : t('share.videoDesktop'));
@@ -247,12 +264,12 @@ export class ShareModal extends Modal {
       const duration = Math.max(1.6, item.text.length / ((item.text.match(/[㐀-鿿]/g) || []).length > item.text.length / 2 ? 4.5 : 15)), cue = { item, from: at, to: at + duration, marks: estimateMarks(item.text, duration, at) };
       at += duration + 0.2; return cue;
     });
-    const envelope = Float32Array.from({ length: Math.ceil(at * FPS) + 90 }, (_, i) => 0.55 + 0.35 * Math.sin(i / 2.3) * Math.cos(i / 7));
+    const features = analyse(sampleVoice(at + 1), SAMPLE_RATE, styleNeeds(this.s.visual), FPS);
     const accounts = outroAccounts(share.accounts, kind => this.manager.platformLabel(kind));
     const [w, h] = orientation === 'landscape' ? [1920, 1080] : [1080, 1920];
     const make = (key, draw) => {
       const canvas = this[`${key}Frame`][key]; canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d'), scene = buildScene({ orientation, title: this.title(), caption: t('share.captionSample'), byline: share.name, cues, envelope, duration: at,
+      const ctx = canvas.getContext('2d'), scene = buildScene({ orientation, title: this.title(), caption: t('share.captionSample'), byline: share.name, cues, features, visual: this.s.visual, avatar: this.images.avatar || null, duration: at,
         cover: { image: this.images.background || null }, outro: { name: share.name, avatar: this.images.avatar || null, accounts } }, ctx);
       draw(ctx, scene);
     };
@@ -286,7 +303,7 @@ export class ShareModal extends Modal {
     };
     const title = this.title();
     try {
-      const options = { format: this.s.format, videos: this.orientations(), speed, cover: this.s.cover, outro: this.s.outro, srt: this.s.srt, coverImage: this.s.coverImage && video };
+      const options = { format: this.s.format, videos: this.orientations(), visual: this.s.visual, speed, cover: this.s.cover, outro: this.s.outro, srt: this.s.srt, coverImage: this.s.coverImage && video };
       const profileNow = this.speech.profile();
       const result = await this.manager.generate({ items, profile: profileNow, options, title, caption: t('share.caption', { time: formatDuration(estimateSeconds(items) / speed) }), signal: abort.signal, onProgress });
       if (abort.signal.aborted) return;
@@ -301,7 +318,7 @@ export class ShareModal extends Modal {
   }
   async remember() {
     const share = this.plugin.settings.share;
-    Object.assign(share, { format: this.s.format, videos: this.orientations(), speed: this.s.speed, cover: this.s.cover, outro: this.s.outro, srt: this.s.srt, coverImage: this.s.coverImage, embed: this.s.embed });
+    Object.assign(share, { format: this.s.format, videos: this.orientations(), visual: this.s.visual, speed: this.s.speed, cover: this.s.cover, outro: this.s.outro, srt: this.s.srt, coverImage: this.s.coverImage, embed: this.s.embed });
     await this.plugin.saveSettings();
   }
   embed(saved) {

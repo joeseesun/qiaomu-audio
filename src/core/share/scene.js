@@ -1,26 +1,15 @@
 // Draws the share video on any Canvas 2D context: cover, waveform with read-along subtitles, end card.
 // Everything is a pure function of time, so frames can be rendered in any order.
 import { layoutPages, pageAt, wordState } from './subtitles.js';
+import { COLORS, FONT, FPS, MONO, back, circleImage, clamp, ease, rounded } from './draw.js';
+import { DEFAULT_STYLE, VISUAL_STYLES } from './styles.js';
 
+export { FPS };
 export const SIZES = { portrait: { width: 1080, height: 1920 }, landscape: { width: 1920, height: 1080 } };
-export const FPS = 30;
 export const COVER_SECONDS = 0.7;
 export const OUTRO_SECONDS = 6;
-const FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,"Segoe UI",sans-serif';
-const MONO = 'ui-monospace,"SF Mono",Menlo,Consolas,"PingFang SC",monospace';
-const COLORS = { bgTop: '#0a0f1f', bgBottom: '#141c36', accent: '#7dd3fc', strong: '#fbbf24', text: '#f8fafc', terminal: '#0d1117', line: 'rgba(255,255,255,0.14)' };
 const WIDE_OR_WORD = /[㐀-鿿぀-ヿ가-힯]|[^\s㐀-鿿぀-ヿ가-힯]+|\s+/gu;
 
-const clamp = (v, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
-const ease = x => 1 - (1 - clamp(x)) ** 3;
-const back = x => { const c = 1.70158, p = clamp(x) - 1; return 1 + (c + 1) * p ** 3 + c * p ** 2; };
-
-function rounded(ctx, x, y, w, h, r) {
-  const radius = Math.min(r, w / 2, h / 2);
-  ctx.beginPath(); ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius); ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius); ctx.arcTo(x, y, x + w, y, radius); ctx.closePath();
-}
 // Break text into at most maxLines lines no wider than maxWidth, ending the last line with … when cut.
 function greedyLines(ctx, parts, maxWidth) {
   const lines = []; let line = '';
@@ -54,8 +43,9 @@ export function fitFont(ctx, weight, size, family, text, maxWidth, maxLines, min
   return min;
 }
 
-// scene: { orientation, title, caption, cues, envelope, duration, cover: { seconds, image }|null,
-//          outro: { seconds, name, avatar, accounts: [{ glyph, color, label, handle }] }|null, byline }
+// options: { orientation, title, caption, cues, features, visual, avatar, duration, cover: { seconds, image }|null,
+//            outro: { seconds, name, avatar, accounts: [{ glyph, color, label, handle }] }|null, byline }
+// `features` holds what the visual style reads from the audio (see audio.js analyse): at least `envelope`.
 export function buildScene(options, ctx) {
   const size = SIZES[options.orientation] || SIZES.portrait, portrait = options.orientation !== 'landscape';
   const subtitleSize = portrait ? 64 : 56, maxWidth = size.width * (portrait ? 0.82 : 0.8);
@@ -64,8 +54,12 @@ export function buildScene(options, ctx) {
   const cover = options.cover ? { seconds: options.cover.seconds ?? COVER_SECONDS, image: options.cover.image || null } : null;
   const outro = options.outro ? { seconds: options.outro.seconds ?? OUTRO_SECONDS, ...options.outro } : null;
   const intro = cover?.seconds || 0;
+  const features = options.features || { envelope: options.envelope };
+  // The band where the visual style draws: centred, between the title and the subtitles.
+  const area = { cx: size.width / 2, cy: size.height * (portrait ? 0.42 : 0.5), width: size.width * (portrait ? 0.84 : 0.78), height: portrait ? 340 : 250 };
   return { ...size, portrait, subtitleSize, maxWidth, pages, cover, outro, intro, title: options.title || '', caption: options.caption || '', byline: options.byline || '',
-    envelope: options.envelope, duration: options.duration, total: intro + options.duration + (outro?.seconds || 0) };
+    features, envelope: features.envelope, visual: VISUAL_STYLES[options.visual] ? options.visual : DEFAULT_STYLE, avatar: options.avatar || outro?.avatar || null, area,
+    duration: options.duration, total: intro + options.duration + (outro?.seconds || 0) };
 }
 
 function background(ctx, scene, glow = 0) {
@@ -114,17 +108,6 @@ export function drawCover(ctx, scene, progress = 1) {
 }
 
 // ---- content -----------------------------------------------------------------------------------------------
-function waveform(ctx, scene, t) {
-  const { width, height, portrait, envelope } = scene, pitch = portrait ? 20 : 22, bars = Math.floor((width * (portrait ? 0.84 : 0.78)) / pitch), center = (bars - 1) / 2;
-  const midY = height * (portrait ? 0.42 : 0.5), maxH = portrait ? 340 : 250, x0 = (width - bars * pitch) / 2;
-  for (let i = 0; i < bars; i++) {
-    const at = Math.round((t + (i - center) * 0.045) * FPS), level = at >= 0 && at < envelope.length ? envelope[at] : 0;
-    const taper = 0.35 + 0.65 * Math.cos(((i - center) / (center + 1)) * Math.PI / 2), h = Math.max(8, level * maxH * taper + 8);
-    ctx.fillStyle = i <= center ? COLORS.accent : 'rgba(248,250,252,0.26)';
-    rounded(ctx, x0 + i * pitch, midY - h / 2, pitch * 0.58, h, pitch * 0.29); ctx.fill();
-  }
-  return envelope[Math.min(envelope.length - 1, Math.max(0, Math.round(t * FPS)))] || 0;
-}
 function subtitles(ctx, scene, t) {
   const page = pageAt(scene.pages, t); if (!page) return;
   const { width, height, portrait } = scene, size = scene.subtitleSize * (page.heading ? 1.12 : 1), lineHeight = size * 1.5;
@@ -156,7 +139,7 @@ function chrome(ctx, scene, t) {
 export function drawContent(ctx, scene, t) {
   const at = Math.min(scene.envelope.length - 1, Math.max(0, Math.round(t * FPS)));
   background(ctx, scene, 0.6 + 0.4 * (scene.envelope[at] || 0));
-  waveform(ctx, scene, t); subtitles(ctx, scene, t); chrome(ctx, scene, t);
+  VISUAL_STYLES[scene.visual].draw(ctx, scene, t); subtitles(ctx, scene, t); chrome(ctx, scene, t);
 }
 
 // ---- end card ----------------------------------------------------------------------------------------------
@@ -177,10 +160,7 @@ export function drawOutro(ctx, scene, t) {
   const pop = back((t - 0.15) / 0.5), ax = width / 2, ay = y + 130, ar = (portrait ? 78 : 66) * Math.max(0, pop);
   if (ar > 1) {
     ctx.save(); ctx.beginPath(); ctx.arc(ax, ay, ar, 0, Math.PI * 2); ctx.clip();
-    if (outro.avatar) {
-      const w = outro.avatar.width || outro.avatar.naturalWidth, h = outro.avatar.height || outro.avatar.naturalHeight, side = Math.min(w, h);
-      ctx.drawImage(outro.avatar, (w - side) / 2, (h - side) / 2, side, side, ax - ar, ay - ar, ar * 2, ar * 2);
-    }
+    if (outro.avatar) circleImage(ctx, outro.avatar, ax, ay, ar);
     else { ctx.fillStyle = '#1f2937'; ctx.fillRect(ax - ar, ay - ar, ar * 2, ar * 2); ctx.fillStyle = COLORS.accent; ctx.font = `700 ${ar}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText([...outro.name || '·'][0], ax, ay + 4); }
     ctx.restore(); ctx.strokeStyle = COLORS.accent; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(ax, ay, ar, 0, Math.PI * 2); ctx.stroke();
   }

@@ -1,6 +1,8 @@
 // Turns chosen sentences into shareable files: speech → one track → speed → MP3 / SRT / cover / MP4.
 // Browser-only pieces (decoding, canvas, encoders) are injected through `deps`, so the flow is testable.
-import { SAMPLE_RATE, encodeMp3, envelope, srt, timeStretch, trimSilence } from './audio.js';
+import { SAMPLE_RATE, encodeMp3, srt, timeStretch, trimSilence } from './audio.js';
+import { analyse } from './analysis.js';
+import { styleNeeds } from './styles.js';
 import { assemble, retime, subtitleCues } from './timeline.js';
 import { FPS, buildScene } from './scene.js';
 import { renderCoverImage, renderVideo } from './video.js';
@@ -52,10 +54,10 @@ export async function runExport(job, deps) {
   }
   if (outputs.srt) files.push({ kind: 'subtitle', name: `${base}.srt`, mime: 'application/x-subrip', bytes: encoder.encode(srt(subtitleCues(cues))) });
 
-  const orientations = outputs.videos || [], levels = envelope(pcm, SAMPLE_RATE, FPS);
+  const orientations = outputs.videos || [], features = outputs.videos?.length || outputs.cover ? analyse(pcm, SAMPLE_RATE, styleNeeds(job.visual), FPS) : null;
   const sceneFor = orientation => {
     const size = orientation === 'landscape' ? [1920, 1080] : [1080, 1920];
-    return buildScene({ orientation, title: job.title || base, caption: job.caption || '', byline: job.outro?.name || job.artist || '', cues, envelope: levels, duration,
+    return buildScene({ orientation, title: job.title || base, caption: job.caption || '', byline: job.outro?.name || job.artist || '', cues, features, visual: job.visual, avatar: job.avatar, duration,
       cover: job.cover || null, outro: job.outro || null }, deps.makeContext(...size));
   };
   for (let i = 0; i < orientations.length; i++) {
