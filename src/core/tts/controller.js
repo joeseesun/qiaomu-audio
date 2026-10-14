@@ -153,9 +153,19 @@ export class TtsController {
     void this.playCurrent(this.generation);
   }
   skip(delta) {
-    const index = Math.max(0, Math.min(this.items.length - 1, this.index + delta));
-    if (index === this.index) return;
-    this.index = index; this.retry();
+    this.seek(this.index + delta);
+  }
+  // Navigating a paused session must never start speaking. Explicit restart
+  // actions can opt into playback; all outstanding synthesis is superseded.
+  seek(index, { paused = this.state === 'paused' } = {}) {
+    if (!this.items.length || !Number.isFinite(index)) return;
+    index = Math.max(0, Math.min(this.items.length - 1, Math.trunc(index)));
+    ++this.generation; this.abort?.abort(); this.releasePlayer(); this.pending.clear();
+    this.abort = new AbortController(); this.index = index; this.error = null;
+    this.paused = paused; this.deferred = paused; this.waitingSection = false; this.preparingSegment = false;
+    if (paused) {
+      this.owner?.clearHighlight?.(); this.state = 'paused'; this.emit();
+    } else { this.beforePlay(); void this.playCurrent(this.generation); }
   }
   setRate(rate) {
     this.rate = Math.max(0.5, Math.min(2, Number(rate) || 1));

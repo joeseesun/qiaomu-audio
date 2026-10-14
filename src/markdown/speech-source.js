@@ -138,3 +138,22 @@ export function lineOfOffset(source, offset) {
   for (let i = 0; i < Math.min(offset, source.length); i++) if (source.charCodeAt(i) === 10) line++;
   return line;
 }
+
+// Keep parsing the whole Markdown document so a cursor inside code, YAML or
+// a link cannot expose hidden syntax. Only the first spoken chunk is trimmed.
+export function readingPlan(source, { offset = 0, exact = false, ...options } = {}) {
+  const items = markdownChunks(source, options);
+  let index = items.findIndex(item => item.end > offset);
+  if (index < 0) return { items, index: -1 };
+  if (exact && items[index].start < offset) {
+    const { text, map } = markdownSpeech(source), item = items[index];
+    const from = map.findIndex(pos => pos >= offset);
+    let to = from;
+    while (to >= 0 && to < map.length && map[to] < item.end) to++;
+    const tail = from < 0 ? '' : text.slice(from, to).trim();
+    if (!WORD.test(tail)) index++;
+    else items[index] = { text: tail, start: map[from], end: item.end };
+    if (index >= items.length) index = -1;
+  }
+  return { items, index };
+}

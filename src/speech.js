@@ -1,4 +1,6 @@
-import { Platform, requestUrl } from 'obsidian';
+import { Notice, Platform, requestUrl } from 'obsidian';
+import { t } from './i18n.js';
+import { rememberSpeechChoice } from './core/tts/recent.js';
 import { TtsController } from './core/tts/controller.js';
 import { EdgeSpeechClient } from './core/tts/edge-client.js';
 import { buildSpeechRequest, checkTtsSignal, synthesizeHttp, ttsError, ttsProfile } from './core/tts/providers.js';
@@ -36,7 +38,12 @@ export class SpeechService {
         if (profile.id === 'localModel') return plugin.local().synthesize(profile, text, signal);
         return synthesizeHttp(profile, text, { request: requestUrl, key: profile.key, signal });
       },
-      onChange: controller => { for (const listener of this.listeners) listener(controller); },
+      onChange: controller => {
+        if (controller.state === 'playing' && !this.preview && rememberSpeechChoice(this.settings, controller.profile)) {
+          void Promise.resolve(plugin.saveSettings?.()).catch(() => new Notice(t('settings.saveError')));
+        }
+        for (const listener of this.listeners) listener(controller);
+      },
     });
   }
   get settings() { return this.plugin.settings.tts; }

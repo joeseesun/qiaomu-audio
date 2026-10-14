@@ -1,5 +1,6 @@
 import { TTS_PROVIDERS } from './core/tts/providers.js';
 import { ASR_LANGUAGES, MAX_PROFILES, cleanProfile } from './core/asr/providers.js';
+import { normalizeRecentChoices } from './core/tts/recent.js';
 
 // Keys live in Obsidian's SecretStorage, never in data.json. IDs: lowercase letters, digits and dashes.
 export const ttsSecretId = (provider, namespace = 'qiaomu-audio') => `${namespace}-tts-${String(provider).toLowerCase()}`;
@@ -21,7 +22,7 @@ export const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
 export function defaultSettings(desktop = true) {
   return {
-    tts: { provider: desktop ? 'edge' : 'system', profiles: {}, rate: 1, welcomed: false },
+    tts: { provider: desktop ? 'edge' : 'system', profiles: {}, rate: 1, welcomed: false, recent: [] },
     // engine: '' (not chosen yet), 'local' (SenseVoice on this computer) or 'cloud:<profile id>'.
     asr: { engine: '', profiles: [], language: 'auto', mode: 'live', keepAudio: true },
   };
@@ -34,6 +35,7 @@ export function normalizeSettings(raw, desktop = true) {
   tts.profiles = Object.fromEntries(Object.entries(tts.profiles).filter(([id, p]) => TTS_PROVIDERS[id] && p && typeof p === 'object' && !Array.isArray(p)).map(([id, p]) => [id, Object.fromEntries(['voice', 'model', 'baseUrl', 'region', 'resourceId'].filter(key => typeof p[key] === 'string').map(key => [key, p[key]]))]));
   tts.rate = RATES.includes(Number(tts.rate)) ? Number(tts.rate) : 1;
   tts.welcomed = tts.welcomed === true;
+  tts.recent = normalizeRecentChoices(tts.recent);
 
   const source = value.asr && typeof value.asr === 'object' ? value.asr : {};
   const taken = new Set();

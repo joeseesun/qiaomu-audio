@@ -7,7 +7,10 @@ Read any Obsidian note aloud with one click, and dictate speech straight into yo
 ## Read aloud
 
 - Use the speaker button in any Markdown note. Read selected text, start at the cursor, or start from the visible text in reading view.
-- Pause, resume, move between sentences, change speed and choose a voice in a compact playback bar. The current sentence is highlighted in the editor; reading view follows the relevant text. Manual scrolling pauses page following until you choose to return.
+- Pause/resume, move between sentences or drag the sentence slider. Seeking while paused stays paused. The player keeps its size across loading, playback and following states.
+- Place the caret and use the caret button to read from that exact character; selected text is read on its own. Moving the caret does not interrupt playback. Use **More → Read current note from the start** to restart the full note. Finished selections replay their original scope.
+- The current sentence is highlighted in the editor; reading view follows the relevant text. Manual scrolling pauses following. The locate button returns to the spoken text without seeking audio.
+- Your service, model, voice and speed survive a restart. The voice picker offers up to eight recently played combinations for one-click restoration; auditioning voices does not fill history. Keys stay in SecretStorage.
 - Frontmatter, code blocks, formulas, comments, embedded media and raw URLs are skipped. Links read their visible text.
 - Choose system speech, Mac speech, Edge TTS, offline Kokoro/MeloTTS, OpenAI and compatible services, Qwen, Doubao, MiniMax, SiliconFlow, ElevenLabs or Azure.
 - Import saved reading settings and keys from Qiaomu Reader. Matching downloaded model data is reused.
