@@ -1,6 +1,6 @@
 # Qiaomu Audio
 
-Read any Obsidian note aloud with one click, and dictate speech straight into your notes.
+Export notes as audio or subtitled video, read aloud with one click, and dictate speech straight into your notes.
 
 [Official directory](https://community.obsidian.md/plugins/qiaomu-audio) · [中文说明](README_ZH.md) · [Releases](https://github.com/joeseesun/qiaomu-audio/releases) · [Help and feedback](https://github.com/joeseesun/qiaomu-audio/issues)
 
@@ -52,7 +52,7 @@ Voice tests send a short sample sentence. Recognition tests send one second of g
 
 ## Install
 
-Open the [official directory entry](https://community.obsidian.md/plugins/qiaomu-audio) and choose **Add to Obsidian**, or search **Qiaomu Audio** in Community plugins once the client catalog includes it. Version 1.0.1 has completed its automated official review and its listing is public; the last recorded client-catalog check is in the [release evidence](docs/release-evidence-1.0.1.md).
+Search **Qiaomu Audio** in Community plugins, or open the [official directory entry](https://community.obsidian.md/plugins/qiaomu-audio) and choose **Add to Obsidian**. Version 1.1.0 has completed its automated official review; community search, installation and enabling were verified in an isolated Obsidian 1.14.4 macOS vault. The directory still marks the plugin as not manually reviewed by Obsidian staff. See the [release evidence](docs/release-evidence-1.1.0.md).
 
 For manual installation, use the [latest release](https://github.com/joeseesun/qiaomu-audio/releases/latest), put `main.js`, `manifest.json` and `styles.css` in `<vault>/.obsidian/plugins/qiaomu-audio/`, then enable Qiaomu Audio in Community plugins.
 
