@@ -129,7 +129,8 @@ export function openVoicePicker(host, options = {}) {
       try {
         if (key !== oldKey) setSecret(host.app, ttsSecretId(id, host.manifest.id), key);
         host.settings.tts.profiles[id] = saved; host.settings.tts.provider = id; host.settings.tts.welcomed = true;
-        await host.saveSettings(); host.reading?.restartWithSettings();
+        if (options.onChange) await options.onChange();
+        else { await host.saveSettings(); host.reading?.restartWithSettings(); }
       } catch (error) {
         host.settings.tts = previous;
         if (key !== oldKey) setSecret(host.app, ttsSecretId(id, host.manifest.id), oldKey);
