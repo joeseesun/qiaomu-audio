@@ -1,7 +1,7 @@
 {
   "id": "qiaomu-audio",
   "name": "Qiaomu Audio",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "minAppVersion": "1.11.4",
   "description": "Read any note aloud with one click, and dictate speech straight into your notes.",
   "author": "向阳乔木",

@@ -75,14 +75,16 @@ export default class QiaomuAudioPlugin extends Plugin {
   }
   // Two header buttons on every Markdown note: read aloud and dictate.
   decorateViews() {
+    for (const el of this.actionEls) if (!el.isConnected) { el._qaudioDispose?.(); this.actionEls.delete(el); }
     for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
       const view = leaf.view;
       if (!(view instanceof MarkdownView) || view[DECORATED]) continue;
       view[DECORATED] = true;
       const mic = quietAction(view.addAction('mic', t('action.dictate'), () => this.dictation.toggle(view)), t('action.dictate'));
-      const read = quietAction(view.addAction('volume-2', t('action.read'), () => this.readAloud(view)), t('action.read'));
+      const read = quietAction(view.addAction('play', t('action.read'), () => this.readAloud(view)), t('action.read'));
       mic.addClass('qaudio-action'); read.addClass('qaudio-action');
       this.actionEls.add(mic); this.actionEls.add(read);
+      this.actionEls.add(this.reading.attachTrigger(view, read));
     }
   }
   registerCommands() {

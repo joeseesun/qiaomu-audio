@@ -1,6 +1,9 @@
 // Chinese and English are reviewed. Other Obsidian languages fall back to English.
 // Each entry is [zh, en]; placeholders are named, e.g. {status}. scripts/check-i18n.mjs checks parity.
 export const STRINGS = {
+  'player.options': ['播放选项', 'Playback options'],
+  'player.sound': ['声音与设置', 'Voice and settings'],
+  'player.positionFollow': ['进度与跟随', 'Position and follow'],
   'settings.cancel': ['取消', 'Cancel'],
   "asr.addTitle": ["添加转写服务", "Add transcription service"],
   "asr.addHelp": ["选择服务并填写必要配置，确认后才会添加并使用。连接可在添加后测试。", "Choose a service and enter its required settings. Confirm to add and use it, then test the connection."],
