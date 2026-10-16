@@ -1,13 +1,13 @@
-import { Notice, Platform, PluginSettingTab, Setting, requestUrl, setIcon } from 'obsidian';
-import { TTS_PROVIDERS, ttsProfile } from '../core/tts/providers.js';
+import { Notice, Platform, PluginSettingTab, Setting, setIcon } from 'obsidian';
+import { TTS_PROVIDERS } from '../core/tts/providers.js';
 import { cloudService } from '../core/cloud-services.js';
-import { changeSpeechModel, modelKey, uniqueChoices } from '../core/tts/choices.js';
+import { uniqueChoices } from '../core/tts/choices.js';
 import { ASR_LANGUAGES, ASR_PROVIDERS, MAX_PROFILES, PROTOCOLS, cloudConfig, isLocalUrl, providerOf, withProvider } from '../core/asr/providers.js';
-import { LOCAL_ASR_MODEL, normalizeLocalProfile } from '../runtime/local.js';
+import { LOCAL_ASR_MODEL } from '../runtime/local.js';
 import { currentLanguage, errorText, t } from '../i18n.js';
 import { asrSecretId, getSecret, setSecret, ttsSecretId } from '../settings.js';
-import { hiddenProvider, providerHelp, providerLabel } from '../speech.js';
-import { SpeechChoices, audioSpeechChoiceText } from './speech-choices.js';
+import { providerLabel } from '../speech.js';
+import { openVoicePicker, audioSpeechChoiceText } from './speech-choices.js';
 import { AsrServiceModal } from './asr-service-modal.js';
 import { LocalModelPanel } from './local-panel.js';
 import { findSpeechSettings, copySpeechSettings } from '../shared/configuration.js';
@@ -86,6 +86,7 @@ export class AudioSettingTab extends PluginSettingTab {
   }
   hide() { this.asrModal?.close(); this.cleanup(); }
   cleanup() {
+    const dialog = this.soundDialog; this.soundDialog = null; if (dialog && !dialog.closed) { dialog.adapter.closed = null; dialog.close(); }
     this.unsubscribe?.(); this.unsubscribe = null;
     this.removeVoicesListener?.(); this.removeVoicesListener = null;
     this.asrTestAbort?.abort(); this.asrTestAbort = null;
@@ -177,74 +178,14 @@ export class AudioSettingTab extends PluginSettingTab {
   renderSpeech(body) {
     const plugin = this.plugin, speech = plugin.speech, settings = plugin.settings.tts, id = settings.provider;
     const profile = speech.profile();
-    let resetPreview = () => {};
     const host = this.section(body, t('settings.voiceSection'), t('settings.voiceSectionDesc'));
-    const changed = async (render = true) => {
-      speech.stopPreview(this.previewOwner); speech.controller.cache.clear();
-      await this.save(); plugin.reading.restartWithSettings();
-      if (render) this.refresh();
-    };
-    const update = async (key, value) => {
-      if (['baseUrl', 'region'].includes(key)) delete plugin.voiceCatalogs[id];
-      const current = ttsProfile(settings, id);
-      let next = key === modelKey(current) && id !== 'localModel' ? changeSpeechModel(current, value, plugin.voiceCatalogs[id] || {}) : { ...current, [key]: value };
-      if (id === 'localModel') next = normalizeLocalProfile(key === 'model' ? { ...next, voice: '' } : next);
-      const { id: _id, label: _label, ...saved } = next;
-      settings.profiles[id] = saved; await changed();
-    };
-    const service = new Setting(host).setName(t('settings.service')).addDropdown(drop => {
-      for (const [key, value] of Object.entries(TTS_PROVIDERS)) if (!hiddenProvider(key, id)) drop.addOption(key, providerLabel(t, key, value.label));
-      drop.setValue(id).onChange(async value => { settings.provider = value; await changed(); });
-    });
-    const desc = createFragment(f => {
-      f.appendText(t(providerHelp(id)));
-      if (id === 'doubao' || id === 'minimax') { f.createEl('br'); f.appendText(t(`tts.help.${id}`)); }
-    });
-    service.setDesc(desc);
-    if (!['system', 'macos', 'edge', 'localModel'].includes(id)) {
-      const key = this.secret(host, ttsSecretId(id, plugin.manifest.id), () => { delete plugin.voiceCatalogs[id]; void changed(); resetPreview(); }, () => resetPreview());
-      this.serviceLinks(key, 'tts', id);
-    }
-    if (id === 'azure') new Setting(host).setName(t('settings.region')).setDesc(t('settings.regionHelp')).addText(text => {
-      text.setPlaceholder(t('settings.regionPlaceholder')).setValue(profile.region || '');
-      text.inputEl.addEventListener('change', () => update('region', text.getValue().trim()));
-    });
-    if (id === 'compatible') this.urlField(host, profile, value => update('baseUrl', value));
-    this.panels.push(new SpeechChoices(host.createDiv(), { host: plugin, tx: audioSpeechChoiceText, chinese: currentLanguage() === 'zh', onChange: key => changed(key !== 'voice'), errorText: error => errorText(error, id) }));
-    if (id === 'localModel' && Platform.isDesktopApp) this.panels.push(new LocalModelPanel(host.createDiv(), { manager: plugin.local(), model: profile.model, onReady: () => this.refresh() }));
-
-    // Test voice with live status.
-    const test = new Setting(this.section(body)).setName(t('settings.preview')).setDesc(t(['system', 'macos', 'localModel'].includes(id) ? 'settings.previewDesc' : 'settings.previewCloudDesc'));
-    test.settingEl.addClass('qaudio-preview');
-    const status = test.descEl.createSpan({ cls: 'qaudio-status-line', attr: { role: 'status' } });
-    let previewButton, stopButton;
-    resetPreview = () => {
-      speech.stopPreview(this.previewOwner);
-      const problem = speech.configurationError();
-      status.setText(problem ? errorText(problem, id) : t('settings.unverified'));
-      status.toggleClass('is-error', !!problem); status.removeClass('is-ready');
-      previewButton?.setDisabled(false); stopButton?.setDisabled(true);
-    };
-    const listener = c => {
-      if (c.owner !== this.previewOwner) return;
-      status.setText(c.state === 'error' ? errorText(c.error, id) : t(c.state === 'ended' ? 'state.verified' : `state.${c.state}`));
-      status.toggleClass('is-ready', c.state === 'ended'); status.toggleClass('is-error', c.state === 'error');
-      const busy = ['loading', 'playing', 'paused'].includes(c.state);
-      previewButton.setDisabled(busy); stopButton.setDisabled(!busy);
-    };
-    this.unsubscribe = speech.subscribe(listener);
-    test.addButton(b => { stopButton = b; b.setButtonText(t('settings.stop')).setDisabled(true).onClick(resetPreview); });
-    test.addButton(b => { previewButton = b; b.setButtonText(t('settings.preview')).setCta().onClick(() => {
-      const problem = speech.configurationError();
-      if (problem) { status.setText(errorText(problem, id)); status.addClass('is-error'); this.focusProblem(body, problem); return; }
-      speech.controller.makeAudio = () => new window.Audio();
-      speech.startPreview(this.previewOwner, t('tts.sample'));
-    }); });
-    resetPreview();
-
-    const advanced = this.advanced(body);
-    if (profile.baseUrl !== undefined && id !== 'compatible') this.urlField(advanced, profile, value => update('baseUrl', value));
-    if (!advanced.childElementCount) advanced.parentElement.remove();
+    const summary = new Setting(host).setName(providerLabel(t, id, TTS_PROVIDERS[id].label)).setDesc(plugin.reading.voiceLabel());
+    summary.addButton(button => button.setButtonText(t('player.sound')).onClick(() => {
+      this.soundDialog?.close();
+      this.soundDialog = openVoicePicker(plugin, { tx: audioSpeechChoiceText, chinese: currentLanguage() === 'zh', errorText: error => errorText(error, speech.profile().id), onClosed: () => { if (body.isConnected) this.refresh(); } });
+    }));
+    const problem = speech.configurationError(profile);
+    if (problem) host.createDiv({ cls: 'qaudio-feedback', text: errorText(problem, id) });
     void findSpeechSettings(plugin.app, 'qiaomu-ai-rss').then(found => {
       if (!found || !body.isConnected) return;
       new Setting(this.section(body)).setName(t('settings.importRss')).setDesc(t('settings.importRssDesc'))

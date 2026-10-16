@@ -19,12 +19,37 @@ export class ReadingManager {
     this.status = plugin.addStatusBarItem(); this.status.addClass('qaudio-status', 'qaudio-hidden');
     this.status.addEventListener('click', () => this.toggle());
   }
+  attachTrigger(view, trigger) {
+    const slot = trigger.ownerDocument.createElement('div'); slot.className = 'qaudio-speech-slot';
+    trigger.before(slot); slot.append(trigger); view._qaudioSpeechSlot = slot;
+    const more = iconButton(slot, 'ellipsis', t('player.more'), event => this.playbackMenu(event, view), { cls: 'qaudio-idle-more' });
+    trigger.addClass('qaudio-trigger'); more.addEventListener('mousedown', event => event.preventDefault());
+    const resize = new slot.ownerDocument.defaultView.ResizeObserver(() => slot.classList.toggle('is-narrow', view.containerEl.clientWidth <= 650));
+    resize.observe(view.containerEl); slot.classList.toggle('is-narrow', view.containerEl.clientWidth <= 650);
+    slot._qaudioDispose = () => resize.disconnect();
+    this.plugin.register(slot._qaudioDispose);
+    return slot;
+  }
+  finishClosing() {
+    if (!this.closing) return;
+    const { slot, bar, timer } = this.closing; slot.ownerDocument.defaultView.clearTimeout(timer);
+    slot.classList.remove('is-open', 'is-closing'); bar.remove(); this.closing = null;
+  }
+  updateRing(session) {
+    if (!session.ui?.progress || this.controller.owner !== session.owner) return;
+    const c = this.controller, total = session.items.reduce((sum, item) => sum + item.text.length, 0);
+    const before = session.items.slice(0, c.index).reduce((sum, item) => sum + item.text.length, 0);
+    const fraction = c.state === 'ended' ? 1 : Math.min(1, (before + (session.spoken || 0)) / Math.max(1, total));
+    session.ui.play.style.setProperty('--qaudio-progress', String(fraction));
+    session.ui.progress.setAttribute('aria-valuenow', String(Math.round(fraction * 100)));
+  }
   get controller() { return this.plugin.speech.controller; }
   isActive() { return !!this.session; }
   isPlaying() { return !!this.session && this.controller.owner === this.session.owner && BUSY.includes(this.controller.state); }
 
   start(view, mode = 'auto') {
     if (!view?.file || !view.editor) { new Notice(t('notice.noNote')); return; }
+    if (!this.plugin.settings.tts.welcomed) { this.voiceMenu(); return; }
     const speech = this.plugin.speech, editor = view.editor, source = editor.getValue(), { limit, clauses } = speech.chunking();
     if (mode === 'selection' && !editor.somethingSelected()) { new Notice(t('notice.selectText')); return; }
     let items, index = 0;
@@ -49,7 +74,7 @@ export class ReadingManager {
     let session = this.session;
     if (session?.view === view && session.file === view.file) {
       speech.stopPreview();
-      Object.assign(session, { items, index, follow: true, error: null, fingerprint, selection, dirty: false, completed: false, scrubbing: false });
+      Object.assign(session, { items, index, follow: true, error: null, spoken: 0, fingerprint, selection, dirty: false, completed: false, scrubbing: false });
     } else {
       this.stop();
       session = this.session = { view, file: view.file, items, index, follow: true, error: null, fingerprint, progressKey, selection };
@@ -58,6 +83,7 @@ export class ReadingManager {
       view, follow: true,
       clearHighlight: () => showSpeechRange(view, null),
       onSegment: item => this.onSegment(session, item),
+      onProgress: (_item, _index, word) => { session.spoken = word?.end || 0; this.updateRing(session); },
     };
     if (!session.bar) { this.mountBar(session); this.watchScroll(session); }
     const profile = speech.profile(), problem = speech.configurationError(profile);
@@ -69,7 +95,7 @@ export class ReadingManager {
     if (session !== this.session) return;
     const { view } = session;
     if (view.file !== session.file || !view.containerEl.isConnected) { this.stop(); return; }
-    session.index = this.controller.index;
+    session.index = this.controller.index; session.spoken = 0; this.updateRing(session);
     if (!session.selection && !session.dirty) {
       rememberProgress(this.plugin.settings.readingProgress, session.progressKey, session.fingerprint, item.start);
       window.clearTimeout(this.progressTimer); this.progressTimer = window.setTimeout(() => { void this.plugin.saveSettings(); }, 700);
@@ -181,7 +207,7 @@ export class ReadingManager {
       this.controller.start(session.owner, session.items, profile, { index, rate: this.plugin.speech.settings.rate, paused: this.controller.state === 'paused' });
     } else this.retry();
   }
-  stop() {
+  stop(animate = false) {
     const session = this.session; if (!session) return;
     window.clearTimeout(this.progressTimer);
     if (!session.selection) void this.plugin.saveSettings();
@@ -189,8 +215,16 @@ export class ReadingManager {
     this.plugin.speech.discardPreview(session.owner); this.voicePicker?.close();
     this.controller.stop(session.owner);
     showSpeechRange(session.view, null);
-    session.unwatch?.(); session.bar?.remove();
-    session.barObserver?.disconnect();
+    session.unwatch?.(); this.finishClosing();
+    const slot = session.bar?.parentElement, win = slot?.ownerDocument.defaultView;
+    if (animate && slot?.classList.contains('qaudio-speech-slot') && !win.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      session.ui.panel.hidden = true; session.ui.message.classList.add('qaudio-hidden'); session.ui.play.setIconName('play');
+      session.bar.inert = true; slot.classList.add('is-closing');
+      const focused = session.bar.contains(slot.ownerDocument.activeElement);
+      const timer = win.setTimeout(() => { this.finishClosing(); if (focused) slot.querySelector('.qaudio-trigger')?.focus(); }, 340);
+      this.closing = { slot, bar: session.bar, timer };
+    } else { slot?.classList.remove('is-open'); session.bar?.remove(); }
+    session.cleanPanel?.();
     session.layoutObserver?.disconnect();
     session.view.contentEl.style.removeProperty('--qaudio-player-height');
     session.view.contentEl.removeClass('qaudio-has-bar');
@@ -205,30 +239,38 @@ export class ReadingManager {
 
   mountBar(session) {
     const { view } = session;
-    view.contentEl.addClass('qaudio-has-bar');
-    const bar = session.bar = view.contentEl.createDiv({ cls: 'qaudio-bar qaudio-player' });
+    this.finishClosing();
+    const slot = view._qaudioSpeechSlot || view.contentEl;
+    const bar = session.bar = slot.createDiv({ cls: 'qaudio-bar qaudio-player qaudio-inline' });
+    slot.classList.add('is-open');
     const labelId = `qaudio-player-${Date.now().toString(36)}`;
     bar.createSpan({ cls: 'qaudio-sr', text: t('player.label'), attr: { id: labelId } });
     bar.setAttr('role', 'region'); bar.setAttr('aria-labelledby', labelId);
     const row = bar.createDiv('qaudio-bar-row');
+    const tucked = bar.createDiv('qaudio-tucked');
     const ui = session.ui = {};
-    ui.voice = iconButton(row, 'audio-lines', t('player.voice'), event => this.voiceMenu(event), { text: true, cls: 'qaudio-voice' });
-    ui.previous = iconButton(row, 'skip-back', t('player.previous'), () => this.skip(-1));
+    ui.voice = iconButton(tucked, 'audio-lines', t('player.voice'), event => this.voiceMenu(event), { text: true, cls: 'qaudio-voice' });
+    ui.previous = iconButton(tucked, 'skip-back', t('player.previous'), () => this.skip(-1));
     ui.play = iconButton(row, 'play', t('player.play'), () => this.toggle(), { cls: 'qaudio-primary' });
-    ui.next = iconButton(row, 'skip-forward', t('player.next'), () => this.skip(1));
+    ui.next = iconButton(tucked, 'skip-forward', t('player.next'), () => this.skip(1));
     ui.speed = row.createEl('button', { cls: 'qaudio-button qaudio-speed', attr: { type: 'button' } });
     const speedId = `qaudio-speed-${crypto.randomUUID()}`;
     bar.createSpan({ cls: 'qaudio-sr', text: t('player.speed'), attr: { id: speedId } }); ui.speed.setAttribute('aria-labelledby', speedId);
     ui.speed.addEventListener('click', event => this.speedMenu(event));
-    ui.cursor = iconButton(row, 'text-cursor-input', t('cmd.readHere'), () => this.readFromCursor(), { cls: 'qaudio-cursor' });
-    ui.follow = iconButton(row, 'locate-fixed', t('player.follow'), () => this.toggleFollow(), { cls: 'qaudio-follow' });
+    ui.cursor = iconButton(tucked, 'text-cursor-input', t('cmd.readHere'), () => this.readFromCursor(), { cls: 'qaudio-cursor' });
+    ui.follow = iconButton(tucked, 'locate-fixed', t('player.follow'), () => this.toggleFollow(), { cls: 'qaudio-follow' });
     ui.more = iconButton(row, 'ellipsis', t('player.more'), event => this.playbackMenu(event), { cls: 'qaudio-more' });
-    ui.close = iconButton(row, 'x', t('player.close'), () => this.stop(), { cls: 'qaudio-close' });
+    ui.close = iconButton(row, 'x', t('player.close'), () => this.stop(true), { cls: 'qaudio-close' });
     ui.previous.addClass('qaudio-previous'); ui.play.addClass('qaudio-play'); ui.next.addClass('qaudio-next');
-    const footer = bar.createDiv('qaudio-player-footer');
+    const panel = bar.createDiv('qaudio-position-panel'); panel.hidden = true;
+    const panelControls = panel.createDiv('qaudio-position-controls');
+    panelControls.append(ui.previous, ui.next, ui.follow);
+    ui.panel = panel;
+    ui.progress = ui.play.createSpan({ cls: 'qaudio-sr', attr: { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100' }, text: t('player.seek') });
+    const footer = panel.createDiv('qaudio-player-footer');
     ui.state = footer.createSpan({ cls: 'qaudio-player-state', attr: { role: 'status', 'aria-live': 'polite' } });
     ui.position = footer.createSpan('qaudio-player-position');
-    const seekLabel = bar.createEl('label', { cls: 'qaudio-player-seek' });
+    const seekLabel = panel.createEl('label', { cls: 'qaudio-player-seek' });
     seekLabel.createSpan({ cls: 'qaudio-sr', text: t('player.seek') });
     ui.seek = seekLabel.createEl('input', { type: 'range', attr: { min: '1', max: String(session.items.length), step: '1', value: String(session.index + 1) } });
     ui.seek.addEventListener('input', () => { session.scrubbing = true; ui.position.setText(t('state.position', { index: ui.seek.value, total: session.items.length })); });
@@ -237,25 +279,30 @@ export class ReadingManager {
     ui.message = bar.createDiv({ cls: 'qaudio-bar-message', attr: { role: 'status', 'aria-live': 'polite' } });
     // Clicking player controls must leave the editor's caret/selection intact.
     row.addEventListener('mousedown', event => event.preventDefault());
-    const win = bar.ownerDocument.defaultView;
-    session.barObserver = new win.ResizeObserver(entries => {
-      const height = entries[0]?.borderBoxSize?.[0]?.blockSize;
-      if (height && this.session === session) view.contentEl.style.setProperty('--qaudio-player-height', `${height}px`);
-    });
-    session.barObserver.observe(bar);
-    const layout = () => bar.toggleClass('is-narrow', view.contentEl.clientWidth < 500);
-    session.layoutObserver = new win.ResizeObserver(layout); session.layoutObserver.observe(view.contentEl); layout();
+    const outside = event => { if (!panel.contains(event.target) && !ui.more.contains(event.target)) panel.hidden = true; };
+    const escape = event => { if (event.key === 'Escape' && !panel.hidden) { event.preventDefault(); event.stopPropagation(); panel.hidden = true; ui.more.focus(); } };
+    bar.ownerDocument.addEventListener('pointerdown', outside); bar.addEventListener('keydown', escape);
+    session.cleanPanel = () => { bar.ownerDocument.removeEventListener('pointerdown', outside); bar.removeEventListener('keydown', escape); };
     this.render();
   }
-  playbackMenu(event) {
-    const session = this.session; if (!session) return;
+  playbackMenu(event, view = this.session?.view) {
+    if (!view) return;
+    const session = this.session?.view === view ? this.session : null, anchor = event.currentTarget;
+    const show = menu => { const box = anchor.getBoundingClientRect(); menu.setUseNativeMenu(false).showAtPosition({ x: box.left, y: box.bottom }); };
     const menu = new Menu();
-    menu.addItem(item => item.setTitle(t('cmd.readHere')).setIcon('text-cursor-input').setDisabled(session.view.getMode() !== 'source').onClick(() => this.start(session.view, 'cursor')));
-    menu.addItem(item => item.setTitle(t('cmd.readStart')).setIcon('rotate-ccw').onClick(() => this.readFromStart()));
-    menu.addItem(item => item.setTitle(t('cmd.readSelection')).setIcon('text-select').setDisabled(!session.view.editor.somethingSelected()).onClick(() => this.start(session.view, 'selection')));
-    menu.addSeparator();
-    menu.addItem(item => item.setTitle(t('player.settings')).setIcon('settings').onClick(() => this.plugin.openSettings()));
-    const box = event.currentTarget.getBoundingClientRect(); menu.showAtPosition({ x: box.left, y: box.top });
+    menu.addItem(item => item.setTitle(t('player.options')).setIcon('sliders-horizontal').onClick(() => {
+      const next = new Menu();
+      next.addItem(item => item.setTitle(t('player.speed')).setIcon('gauge').onClick(() => this.speedMenu({ currentTarget: anchor })));
+      if (view.getMode() === 'source') next.addItem(item => item.setTitle(t(view.editor.somethingSelected() ? 'cmd.readSelection' : 'cmd.readHere')).setIcon('text-cursor-input').onClick(() => this.start(view, view.editor.somethingSelected() ? 'selection' : 'cursor')));
+      next.addItem(item => item.setTitle(t('cmd.readStart')).setIcon('rotate-ccw').onClick(() => this.start(view, 'start')));
+      show(next);
+    }));
+    menu.addItem(item => item.setTitle(t('player.sound')).setIcon('audio-lines').onClick(() => this.voiceMenu()));
+    if (session) {
+      menu.addItem(item => item.setTitle(t('player.positionFollow')).setIcon('locate-fixed').onClick(() => { session.ui.panel.hidden = false; session.ui.seek.focus(); }));
+      menu.addItem(item => item.setTitle(t('player.close')).setIcon('square').onClick(() => this.stop(true)));
+    }
+    show(menu);
   }
   voiceMenu() {
     this.voicePicker?.close();
@@ -271,7 +318,7 @@ export class ReadingManager {
         this.render();
       }));
     }
-    const box = event.currentTarget.getBoundingClientRect(); menu.showAtPosition({ x: box.left, y: box.top });
+    const box = event.currentTarget.getBoundingClientRect(); menu.showAtPosition({ x: box.left, y: box.bottom });
   }
   voiceLabel() {
     const profile = this.plugin.speech.profile();
@@ -289,9 +336,10 @@ export class ReadingManager {
     if (!session?.ui) return;
     const ui = session.ui, playing = state === 'playing' || state === 'loading';
     const icon = playing ? 'pause' : state === 'ended' || state === 'error' ? 'rotate-ccw' : 'play';
-    if (ui.play.dataset.icon !== icon) { ui.play.setIconName(icon); ui.play.dataset.icon = icon; }
+    if (ui.play.dataset.icon !== icon) { ui.play.setIconName(icon); ui.play.dataset.icon = icon; if (!ui.play.ownerDocument.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches) ui.play.querySelector('.qaudio-icon').animate?.([{ opacity: 0, transform: 'scale(.85)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 150 }); }
     ui.play.setLabel(t(playing ? 'player.pause' : state === 'ended' ? 'player.replay' : state === 'error' ? 'player.retry' : 'player.play'));
     ui.play.toggleClass('is-loading', state === 'loading');
+    this.updateRing(session);
     ui.speed.setText(`${this.plugin.speech.settings.rate}×`);
     ui.voice.setLabel(this.voiceLabel());
     ui.follow.setAttribute('aria-pressed', String(session.follow));
@@ -316,7 +364,7 @@ export class ReadingManager {
       ui.message.createSpan({ text: errorText(error, this.plugin.speech.settings.provider) });
       const actions = ui.message.createSpan('qaudio-message-actions');
       iconButton(actions, 'rotate-ccw', t('player.retry'), () => this.retry(), { text: true });
-      iconButton(actions, 'settings', t('player.openSettings'), () => this.plugin.openSettings(), { text: true });
+      iconButton(actions, 'settings', t('player.openSettings'), () => this.voiceMenu(), { text: true });
     } else if (!this.plugin.settings.tts.welcomed && this.plugin.speech.settings.provider === 'edge') {
       ui.message.createSpan({ text: t('player.welcome') });
       iconButton(ui.message.createSpan('qaudio-message-actions'), 'check', t('player.gotIt'), async () => {
@@ -325,5 +373,5 @@ export class ReadingManager {
     }
     ui.message.toggleClass('qaudio-hidden', !ui.message.hasChildNodes() && !ui.message.textContent);
   }
-  dispose() { this.stop(); this.unsubscribe(); }
+  dispose() { this.voicePicker?.close(); this.stop(); this.finishClosing(); this.unsubscribe(); }
 }
