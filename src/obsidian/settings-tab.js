@@ -371,7 +371,8 @@ export class AudioSettingTab extends PluginSettingTab {
     release.createSpan({ cls: 'qaudio-about-label', text: t('about.version') });
     release.createSpan({ cls: 'qaudio-about-version', text: `v${this.plugin.manifest.version}` });
     const actions = hero.createDiv('qaudio-about-actions');
-    for (const [icon, label, href] of [['history', t('about.changelog'), `${repo}/releases`], ['message-circle', t('about.feedback'), `${repo}/issues/new`], ['book-open', t('about.guide'), `${repo}#readme`]]) {
+    this.plugin.updateNotes.addButton(actions);
+    for (const [icon, label, href] of [['message-circle', t('about.feedback'), `${repo}/issues/new`], ['book-open', t('about.guide'), `${repo}#readme`]]) {
       const link = actions.createEl('a', { cls: 'qaudio-about-action', href, attr: external });
       setIcon(link.createSpan({ cls: 'qaudio-icon', attr: { 'aria-hidden': 'true' } }), icon);
       link.createSpan({ text: label });
