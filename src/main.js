@@ -1,3 +1,6 @@
+import { UpdateNotes } from './update-notes.js';
+import { UPDATE_ENTRIES } from './update-notes-release.js';
+import { currentLanguage as updateLocale } from './i18n.js';
 import { MarkdownView, Platform, Plugin } from 'obsidian';
 import { initLanguage, t } from './i18n.js';
 import { TTS_PROVIDERS } from './core/tts/providers.js';
@@ -43,6 +46,7 @@ export default class QiaomuAudioPlugin extends Plugin {
     this.registerEvent(this.app.workspace.on('layout-change', () => { this.decorateViews(); this.reading.checkWorkspace(); }));
     this.registerEvent(this.app.workspace.on('file-open', () => this.reading.checkWorkspace()));
     this.settingTab = new AudioSettingTab(this.app, this);
+    this.updateNotes = new UpdateNotes(this, UPDATE_ENTRIES, updateLocale);
     this.addSettingTab(this.settingTab);
     this.api = createApi(this);
   }
