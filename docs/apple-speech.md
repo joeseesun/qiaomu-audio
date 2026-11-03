@@ -27,6 +27,7 @@
 scripts/build-apple-helper.sh          # 使用 Xcode / Command Line Tools 编译和本地签名
 scripts/build-apple-helper.sh --install
 npm run check
+# 先正常退出其他 Obsidian 实例：其 CLI socket 不按 user-data-dir 隔离。
 OBSIDIAN_EXE=/Applications/Obsidian.app/Contents/MacOS/Obsidian node scripts/qa-apple-host.mjs
 ```
 

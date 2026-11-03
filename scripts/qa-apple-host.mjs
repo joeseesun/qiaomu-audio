@@ -6,7 +6,15 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
 import WebSocket from 'ws';
-const root = process.cwd(), base = await fs.mkdtemp(path.join(os.tmpdir(), 'qaudio-share-'));
+// Obsidian's CLI socket is shared even when --user-data-dir differs. A second
+// instance unlinks it, so acceptance must not run alongside the person's app.
+if (process.platform !== 'darwin') throw Error('Mac acceptance requires macOS.');
+const socketPresent = await fs.stat(path.join(os.homedir(), '.obsidian-cli.sock')).then(() => true, error => {
+  if (error.code === 'ENOENT') return false;
+  throw error;
+});
+if (socketPresent) throw Error('Close other Obsidian instances before isolated Mac acceptance; the CLI socket is shared.');
+const root = process.cwd(), base = await fs.mkdtemp(path.join(os.tmpdir(), 'qaudio-apple-'));
 const vault = path.join(base, 'qaudio-apple-qa'), profile = path.join(base, 'profile'), plugin = path.join(vault, '.obsidian/plugins/qiaomu-audio');
 const output = path.resolve(process.env.QA_OUTPUT || 'artifacts/apple-qa');
 await fs.mkdir(plugin, { recursive: true }); await fs.mkdir(profile); await fs.mkdir(output, { recursive: true });
