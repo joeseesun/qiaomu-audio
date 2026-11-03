@@ -1,3 +1,5 @@
+import { appleAvailable } from '../runtime/apple.js';
+import { applePanel } from './apple-panel.js';
 import { Modal, Platform } from 'obsidian';
 import { ASR_MODELS, LOCAL_ASR_MODEL } from '../runtime/local.js';
 import { t } from '../i18n.js';
@@ -11,6 +13,11 @@ export class ChooseEngineModal extends Modal {
     const { contentEl, plugin } = this;
     this.setTitle(t('choose.title'));
     contentEl.addClass('qaudio-modal', 'qaudio-choose');
+    if (appleAvailable()) {
+      const apple = contentEl.createDiv('qaudio-option');
+      apple.createDiv({ cls: 'qaudio-option-title', text: t('asr.engine.apple') });
+      this.applePanel = applePanel(apple, plugin, async () => { plugin.settings.asr.engine = 'apple'; await plugin.saveSettings(); this.ready = true; this.close(); });
+    }
     if (Platform.isDesktopApp) {
       const local = contentEl.createDiv('qaudio-option');
       local.createDiv({ cls: 'qaudio-option-title', text: t('choose.local') });
@@ -25,12 +32,7 @@ export class ChooseEngineModal extends Modal {
     cloud.createDiv({ cls: 'qaudio-option-title', text: t('choose.cloud') });
     cloud.createDiv({ cls: 'qaudio-muted', text: t('choose.cloudDesc') });
     iconButton(cloud.createDiv('qaudio-actions'), 'settings', t('choose.setup'), () => { this.close(); plugin.openSettings('asr'); }, { text: true });
-    // An already-installed local model needs only one click.
-    if (Platform.isDesktopApp) void plugin.local().status(LOCAL_ASR_MODEL).then(state => {
-      if (state.phase === 'ready' && this.panel && !this.ready) {
-        plugin.settings.asr.engine = 'local'; void plugin.saveSettings().then(() => { this.ready = true; this.close(); });
-      }
-    }).catch(() => {});
+
   }
-  onClose() { this.panel?.destroy(); this.contentEl.empty(); if (this.ready) void this.onReady?.(); }
+  onClose() { this.applePanel?.destroy(); this.panel?.destroy(); this.contentEl.empty(); if (this.ready) void this.onReady?.(); }
 }

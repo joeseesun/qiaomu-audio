@@ -45,3 +45,8 @@
 - 已有本机环境中运行 SenseVoice：中文/英文样例分别约 91/115 毫秒；取消返回 AbortError。没有从插件安装可执行依赖。
 - GitHub CI 覆盖 Windows/macOS/Linux；跨平台 CI 不替代真实设备语音、麦克风或本机安装验收。
 - 云端设置连接成功状态使用可控测试响应验证，未使用真实付费 API 密钥进行所有供应商端到端请求。申请入口部分会跳转登录或对无人浏览器请求返回保护页。
+
+
+## 2026-11-04 · Apple / 系统声音 / Ming
+
+新增独立 Mac 原生组件，通过 stdin/stdout 管道接入现有 TranscriptionService 与 DictationManager；移动端在加载 Node 模块前拒绝该能力。系统录音不更改系统设备。Ming 使用 audio_url 而不是 MiMo 的 input_audio，按服务独立凭据，串行转写。来源、安装和证据见 [apple-speech.md](apple-speech.md)。旧 karaoke-timing 分支的词级高亮已由主线 58c5672 纳入，播放控制与最近音色亦已由 b367f02 纳入；保留后续主线改进，不回灌旧工作区版本。

@@ -60,9 +60,9 @@ export function normalizeSettings(raw, desktop = true) {
   const profiles = (Array.isArray(source.profiles) ? source.profiles : []).slice(0, MAX_PROFILES)
     .map(p => cleanProfile(p, taken)).filter(Boolean);
   let engine = typeof source.engine === 'string' ? source.engine : '';
-  if (engine === 'local' && !desktop) engine = '';
+  if (['local', 'apple'].includes(engine) && !desktop) engine = '';
   if (engine.startsWith('cloud:') && !profiles.some(p => `cloud:${p.id}` === engine)) engine = profiles[0] ? `cloud:${profiles[0].id}` : '';
-  if (engine && engine !== 'local' && !engine.startsWith('cloud:')) engine = '';
+  if (engine && !['local', 'apple'].includes(engine) && !engine.startsWith('cloud:')) engine = '';
   return {
     tts,
     share: normalizeShare(value.share, base.share, desktop),

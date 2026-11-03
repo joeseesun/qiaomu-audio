@@ -32,7 +32,7 @@ export class SpeechChoices {
   }
   async provider(id) {
     this.abort?.abort(); this.host.speech.stopPreview();
-    this.host.settings.tts.provider = id; host.settings.tts.welcomed = true; this.nativeAttempted = false; this.message = '';
+    this.host.settings.tts.provider = id; this.host.settings.tts.welcomed = true; this.nativeAttempted = false; this.message = '';
     await this.onChange('provider'); if (!this.disposed) this.render();
   }
   async recent(value) {

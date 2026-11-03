@@ -25,6 +25,10 @@ Use "Export as audio or video…" in the context menu or command palette to turn
 - Set your name, avatar and where to find you in Settings → Share; they are added automatically. Files go to the vault attachments folder by default, or to any folder on your computer.
 - Browser "system speech" produces no audio file and cannot be exported; choose another voice. Cloud voices bill by character, so the dialog shows the character count first.
 
+## Mac system audio and Apple recognition
+
+The development branch adds Apple on-device recognition, system audio transcription and Ant Ling Ming cloud transcription. [Setup, data boundaries and current verification scope](docs/apple-speech.md). The Mac component is installed separately; a signed public installer has not been released.
+
 ## Dictate
 
 Use the microphone button or the dictation command. Finish to insert recognised text at the captured cursor position; Escape cancels. Failed recognition keeps the recording available for retry or saving.

@@ -3,6 +3,7 @@
 // Tried with real keys in Clipper on a 5-minute Chinese lecture: SiliconFlow, Doubao, GLM, StepFun, MiMo.
 // Groq and OpenAI follow the published OpenAI-style API but were not tried there.
 export const ASR_PROVIDERS = [
+  { id: 'ming', label: 'asr.provider.ming', protocol: 'ming-audio', baseUrl: 'https://api.ant-ling.com/v1', defaultModel: 'Ming-3.0-audio-flash', models: ['Ming-3.0-audio-flash'], chunkSeconds: 20, maxChunkSeconds: 40, keyHelp: 'https://chat.ant-ling.com/platform/api', note: 'asr.note.ming' },
   { id: 'siliconflow', label: 'asr.provider.siliconflow', protocol: 'openai-transcriptions', baseUrl: 'https://api.siliconflow.cn/v1', defaultModel: 'Qwen/Qwen3-ASR-1.7B', models: ['Qwen/Qwen3-ASR-1.7B', 'FunAudioLLM/SenseVoiceSmall', 'XingChenAGI/XingChenASR-V3.2'], keyHelp: 'https://cloud.siliconflow.cn/account/ak', note: 'asr.note.siliconflow' },
   { id: 'doubao', label: 'asr.provider.doubao', protocol: 'doubao-flash', baseUrl: 'https://openspeech.bytedance.com/api/v3', defaultModel: 'bigmodel', models: ['bigmodel'], chunkSeconds: 300, maxChunkSeconds: 540, keyHelp: 'https://console.volcengine.com/speech/new/experience/asr', note: 'asr.note.doubao' },
   { id: 'glm', label: 'asr.provider.glm', protocol: 'openai-transcriptions', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', defaultModel: 'glm-asr-2512', models: ['glm-asr-2512'], chunkSeconds: 18, maxChunkSeconds: 28, keyHelp: 'https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys', note: 'asr.note.glm' },
@@ -60,7 +61,7 @@ export function cloudConfig(profile) {
   const base = asrBaseUrl(profile.baseUrl);
   if (!/^[A-Za-z0-9_./:-]{1,100}$/.test(profile.model || '')) throw asrError('model');
   return {
-    protocol: profile.protocol || info.protocol, baseUrl: base, model: profile.model,
+    protocol: profile.protocol || info.protocol, provider: info.id, baseUrl: base, model: profile.model,
     languageParam: !!info.languageParam, local: isLocalUrl(base),
     chunkSeconds: info.chunkSeconds || 20, maxChunkSeconds: info.maxChunkSeconds || 40,
   };

@@ -1,6 +1,28 @@
 // Chinese and English are reviewed. Other Obsidian languages fall back to English.
 // Each entry is [zh, en]; placeholders are named, e.g. {status}. scripts/check-i18n.mjs checks parity.
 export const STRINGS = {
+  "cmd.systemAudio": ["开始或结束系统声音转写", "Start or finish system audio transcription"],
+  "dictation.systemLabel": ["系统声音", "System audio"],
+  "dictation.systemListening": ["正在转写电脑里的声音", "Transcribing sound from your Mac"],
+  "asr.engine.apple": ["Apple 本机识别", "Apple on-device recognition"],
+  "asr.appleHelp": ["Mac 本机识别需要 macOS 26，系统声音采集需要 macOS 14.4。自动语言暂按中文识别，请按录音选择语言。", "On-device recognition requires macOS 26; system audio capture requires macOS 14.4. Auto currently uses Chinese; select the recording’s language."],
+  "asr.appleCheck": ["检查是否可用", "Check availability"],
+  "asr.applePrepare": ["准备本机模型", "Prepare on-device model"],
+  "asr.applePreparing": ["正在准备 Apple 语言模型…", "Preparing the Apple language model…"],
+  "asr.appleReady": ["本机识别已就绪", "On-device recognition is ready"],
+  "asr.appleInstall": ["安装 Mac 组件", "Install Mac component"],
+  "asr.provider.ming": ["蚂蚁百灵 Ming", "Ant Ling Ming"],
+  "asr.note.ming": ["使用 Ling 开放平台的 API Key。音频将发送到蚂蚁百灵，仅生成原文文字稿。", "Use an API key from the Ling platform. Audio is sent to Ant Ling to produce an original-language transcript."],
+  "error.applePlatform": ["Apple 本机识别需要 macOS 26；其他设备请使用现有本机或云端服务。", "Apple recognition requires macOS 26. Use another local or cloud service on other devices."],
+  "error.appleHelperMissing": ["尚未安装 Mac 组件，请在听写设置中打开安装说明。", "Mac component is missing. Open its installation guide in dictation settings."],
+  "error.appleModelMissing": ["尚未准备此语言的 Apple 模型，请在听写设置中点击「准备本机模型」。", "This Apple language model is missing. Select Prepare on-device model in dictation settings."],
+  "error.appleLanguage": ["Apple 不支持所选识别语言，请换一种语言或服务。", "Apple does not support this recognition language. Choose another language or service."],
+  "error.appleRecognition": ["Apple 识别未完成，录音已保留在当前操作中，可重试或保存。", "Apple recognition did not finish. Retry or save the recording from the current session."],
+  "error.appleProtocol": ["Mac 组件返回的数据不完整，请更新组件后重试。", "The Mac component returned incomplete data. Update it and retry."],
+  "error.appleClosed": ["语音组件已停止，请重新加载乔木语音。", "The speech component has stopped. Reload Qiaomu Audio."],
+  "error.systemAudioDenied": ["无法读取系统声音，请在系统设置的「隐私与安全性」中允许乔木语音组件录制系统声音，再重试。", "System audio is unavailable. Allow Qiaomu Audio Helper under Privacy & Security in System Settings, then retry."],
+  "error.systemAudioStopped": ["系统声音采集已中断，正在保留已录制的内容。", "System audio capture stopped. Keeping the audio already captured."],
+
   'player.options': ['播放选项', 'Playback options'],
   'player.sound': ['声音与设置', 'Voice and settings'],
   'player.positionFollow': ['进度与跟随', 'Position and follow'],

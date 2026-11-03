@@ -70,3 +70,8 @@ npm run check
 - 项目许可：GPL-3.0-only。朗读部分改编自乔木 Reader（GPL-3.0）；云端识别服务列表与协议改编自乔木 Clipper（MIT）。
 - Edge 朗读协议互通参考 rany2/edge-tts（LGPL-3.0），见 `licenses/edge-tts-LGPL.txt`。
 - 本机模型在首次使用时从上游固定版本下载并校验 SHA-256，不随插件分发：Kokoro（Apache-2.0）、MeloTTS（MIT）、SenseVoice Small（FunASR Model License），运行时为 sherpa-onnx（Apache-2.0）。
+
+
+## Mac 本机识别与系统声音转写（开发版本）
+
+新增 Apple 本机识别、系统声音转写和蚂蚁百灵 Ming 云端转写，复用现有听写与录音附件流程。[安装、隐私与验证范围](docs/apple-speech.md)。Mac 组件独立安装，尚未发布签名公证安装包。

@@ -22,6 +22,9 @@ jobs:
           python-version: '3.11'
       - run: npm ci
       - run: npm run check
+      - name: Build Mac speech component
+        if: runner.os == 'macOS'
+        run: scripts/build-apple-helper.sh
       - name: Install isolated Windows Obsidian 1.14.4
         if: runner.os == 'Windows'
         shell: pwsh
