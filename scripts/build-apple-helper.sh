@@ -3,7 +3,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 APP="artifacts/Qiaomu Audio Helper.app"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+cp LICENSE "$APP/Contents/Resources/COPYING"
+cp licenses/cicada-Apache-2.0.txt native/apple/NOTICE "$APP/Contents/Resources/"
 swiftc -swift-version 5 -O -target arm64-apple-macosx14.4 native/apple/main.swift native/apple/SystemAudioTap.swift -o "$APP/Contents/MacOS/qiaomu-audio-helper"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

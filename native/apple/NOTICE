@@ -1,0 +1,10 @@
+Qiaomu Audio Helper
+
+The Core Audio process tap in SystemAudioTap.swift is adapted from:
+Cicada (知了), wquguru/cicada
+https://github.com/wquguru/cicada
+Source revision: 38771f1a5ae691c848ea429f4a870defd92d9d26
+Licensed under Apache License 2.0 (cicada-Apache-2.0.txt).
+
+Qiaomu Audio modifications provide a standalone capture component and a private
+process pipe. The surrounding Qiaomu Audio project is GPL-3.0-only (COPYING).
