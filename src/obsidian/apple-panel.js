@@ -21,6 +21,7 @@ export function applePanel(root, plugin, onReady) {
   };
   actions.addButton(button => button.setButtonText(t('asr.appleCheck')).onClick(() => { void check(button, false); }));
   actions.addButton(button => button.setButtonText(t('asr.applePrepare')).onClick(() => { void check(button, true); }));
+  note.append(' ');
   const help = note.createEl('a', { text: t('asr.appleInstall'), href: 'https://github.com/joeseesun/qiaomu-audio/blob/main/docs/apple-speech.md' });
   help.setAttribute('target', '_blank'); help.setAttribute('rel', 'noopener');
   return { destroy: () => abort.abort() };
