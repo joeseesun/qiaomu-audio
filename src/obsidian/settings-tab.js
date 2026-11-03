@@ -1,3 +1,5 @@
+import { appleAvailable } from '../runtime/apple.js';
+import { applePanel } from './apple-panel.js';
 import { Notice, Platform, PluginSettingTab, Setting, setIcon } from 'obsidian';
 import { TTS_PROVIDERS } from '../core/tts/providers.js';
 import { cloudService } from '../core/cloud-services.js';
@@ -5,7 +7,7 @@ import { uniqueChoices } from '../core/tts/choices.js';
 import { ASR_LANGUAGES, ASR_PROVIDERS, MAX_PROFILES, PROTOCOLS, cloudConfig, isLocalUrl, providerOf, withProvider } from '../core/asr/providers.js';
 import { LOCAL_ASR_MODEL } from '../runtime/local.js';
 import { currentLanguage, errorText, t } from '../i18n.js';
-import { asrSecretId, getSecret, setSecret, ttsSecretId } from '../settings.js';
+import { asrSecretId, getSecret, setSecret } from '../settings.js';
 import { providerLabel } from '../speech.js';
 import { openVoicePicker, audioSpeechChoiceText } from './speech-choices.js';
 import { AsrServiceModal } from './asr-service-modal.js';
@@ -256,6 +258,7 @@ export class AudioSettingTab extends PluginSettingTab {
     const label = p => p.name || `${providerOf(p.provider).label.startsWith('asr.') ? t(providerOf(p.provider).label) : providerOf(p.provider).label} · ${(p.model || '').split('/').pop()}`;
     new Setting(host).setName(t('asr.engine')).addDropdown(drop => {
       if (!engine) drop.addOption('', t('asr.engine.none'));
+      if (appleAvailable()) drop.addOption('apple', t('asr.engine.apple'));
       if (Platform.isDesktopApp) drop.addOption('local', t('asr.engine.local'));
       const counts = new Map();
       for (const p of settings.profiles) { const name = label(p), count = (counts.get(name) || 0) + 1; counts.set(name, count); drop.addOption(`cloud:${p.id}`, count > 1 ? `${name} · ${count}` : name); }
@@ -266,6 +269,7 @@ export class AudioSettingTab extends PluginSettingTab {
         await this.save(); this.refresh();
       });
     });
+    if (engine === 'apple') this.panels.push(applePanel(host, plugin));
     if (engine === 'local') {
       host.createDiv({ cls: 'qaudio-setting-note', text: t('asr.localHelp') });
       this.panels.push(new LocalModelPanel(host.createDiv(), { manager: plugin.local(), model: LOCAL_ASR_MODEL }));

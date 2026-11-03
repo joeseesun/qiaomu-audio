@@ -1,3 +1,4 @@
+import { appleAvailable, createAppleSpeech } from './runtime/apple.js';
 import { UpdateNotes } from './update-notes.js';
 import { UPDATE_ENTRIES } from './update-notes-release.js';
 import { currentLanguage as updateLocale } from './i18n.js';
@@ -41,6 +42,7 @@ export default class QiaomuAudioPlugin extends Plugin {
         .onClick(() => this.reading.start(view, editor.somethingSelected() ? 'selection' : 'cursor')));
       menu.addItem(item => item.setSection('qiaomu-audio').setIcon('share-2').setTitle(t('cmd.share')).onClick(() => this.share.open(view)));
       menu.addItem(item => item.setSection('qiaomu-audio').setIcon('mic').setTitle(t('cmd.dictateHere')).onClick(() => this.dictation.toggle(view)));
+      if (appleAvailable()) menu.addItem(item => item.setSection('qiaomu-audio').setIcon('monitor-speaker').setTitle(t('cmd.systemAudio')).onClick(() => { if (this.dictation.isActive()) void this.dictation.toggle(view); else void this.dictation.start(view, 'system'); }));
     }));
     this.app.workspace.onLayoutReady(() => this.decorateViews());
     this.registerEvent(this.app.workspace.on('layout-change', () => { this.decorateViews(); this.reading.checkWorkspace(); }));
@@ -52,10 +54,11 @@ export default class QiaomuAudioPlugin extends Plugin {
   }
   onunload() {
     this.settingTab?.hide();
-    this.dictation?.dispose(); this.reading?.dispose(); this.speech?.dispose(); this.localManager?.dispose();
+    this.dictation?.dispose(); this.reading?.dispose(); this.speech?.dispose(); this.localManager?.dispose(); this.appleManager?.dispose();
     for (const el of this.actionEls) el.remove();
     this.app.workspace.getLeavesOfType('markdown').forEach(leaf => { if (leaf.view) delete leaf.view[DECORATED]; });
   }
+  apple() { return this.appleManager ||= createAppleSpeech(); }
   activeView() { return this.app.workspace.getActiveViewOfType(MarkdownView); }
   // Desktop-only local runtime, created on first use so mobile never loads Node modules.
   local() {
@@ -122,6 +125,13 @@ export default class QiaomuAudioPlugin extends Plugin {
       const view = this.dictation.session?.view || this.activeView();
       if (!view) return false;
       if (!checking) void this.dictation.toggle(view);
+      return true;
+    } });
+    this.addCommand({ id: 'transcribe-system', name: t('cmd.systemAudio'), icon: 'monitor-speaker', checkCallback: checking => {
+      if (!appleAvailable()) return false;
+      const view = this.dictation.session?.view || this.activeView();
+      if (!view) return false;
+      if (!checking) { if (this.dictation.isActive()) void this.dictation.toggle(view); else void this.dictation.start(view, 'system'); }
       return true;
     } });
     this.addCommand({ id: 'cancel-dictation', name: t('cmd.cancelDictation'), icon: 'x', checkCallback: checking => {

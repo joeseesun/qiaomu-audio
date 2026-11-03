@@ -13,6 +13,7 @@ export class TranscriptionService {
   get settings() { return this.plugin.settings.asr; }
   // What dictation will use now, or null when the person has not chosen yet.
   engine(value = this.settings.engine) {
+    if (value === 'apple') return Platform.isDesktopApp && Platform.isMacOS ? { kind: 'apple', id: 'apple' } : null;
     if (value === 'local') return Platform.isDesktopApp ? { kind: 'local', id: 'local' } : null;
     if (value?.startsWith('cloud:')) {
       const profile = this.settings.profiles.find(p => `cloud:${p.id}` === value);
@@ -22,6 +23,9 @@ export class TranscriptionService {
   }
   async readiness(engine = this.engine()) {
     if (!engine) return asrError('noEngine');
+    if (engine.kind === 'apple') {
+      try { await this.plugin.apple().status(this.settings.language); return null; } catch (error) { return error; }
+    }
     if (engine.kind === 'local') {
       const state = await this.plugin.local().status(LOCAL_ASR_MODEL);
       return state.phase === 'ready' ? null : asrError('localMissing');
@@ -33,6 +37,7 @@ export class TranscriptionService {
     } catch (error) { return error; }
   }
   chunking(engine) {
+    if (engine.kind === 'apple') return { target: 20, maximum: 40 };
     if (engine.kind === 'local') return LOCAL_CHUNK;
     const cfg = cloudConfig(engine.profile);
     return { target: cfg.chunkSeconds, maximum: cfg.maxChunkSeconds };
@@ -40,6 +45,7 @@ export class TranscriptionService {
   // One phrase or recording piece (16 kHz mono samples) → text.
   async recognizePiece(engine, samples, signal) {
     const wav = encodeWav(samples, TARGET_RATE), language = this.settings.language;
+    if (engine.kind === 'apple') return tidyTranscript(await this.plugin.apple().transcribe(wav, language, signal));
     if (engine.kind === 'local') return tidyTranscript(await this.plugin.local().transcribe(LOCAL_ASR_MODEL, wav, signal));
     const cfg = cloudConfig(engine.profile), key = getSecret(this.plugin.app, asrSecretId(engine.profile.id, engine.profile.provider));
     return recognizeCloud(cfg, key, wav, { request: requestUrl, language, signal });
@@ -59,7 +65,7 @@ export class TranscriptionService {
         onProgress?.(++done, pieces.length);
       }
     };
-    const lanes = engine.kind === 'local' ? 1 : Math.min(3, pieces.length);
+    const lanes = engine.kind !== 'cloud' || engine.profile.provider === 'ming' ? 1 : Math.min(3, pieces.length);
     await Promise.all(Array.from({ length: lanes }, worker));
     return joinTranscript(results);
   }

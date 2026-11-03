@@ -9,52 +9,59 @@ import { ChooseEngineModal } from './choose-engine.js';
 // Speak → text at the cursor. "After you finish" recognises the whole recording; "while you speak" recognises each phrase.
 export class DictationManager {
   constructor(plugin) {
-    this.plugin = plugin; this.session = null;
+    this.plugin = plugin; this.session = null; this.generation = 0; this.starting = false; this.disposed = false;
     this.status = plugin.addStatusBarItem(); this.status.addClass('qaudio-status', 'qaudio-recording-status', 'qaudio-hidden');
     this.status.addEventListener('click', () => this.finish());
   }
-  isActive() { return !!this.session; }
+  isActive() { return !!this.session || this.starting; }
   async toggle(view) {
     if (!this.session) return this.start(view);
     if (this.session.state === 'listening') return this.finish();
     if (this.session.state === 'error') return this.close();
   }
-  async start(view) {
-    const plugin = this.plugin;
-    if (this.session) return;
-    if (!view?.file || !view.editor) { new Notice(t('notice.noNote')); return; }
-    const engine = plugin.transcription.engine();
-    if (!engine) { new ChooseEngineModal(plugin, () => this.start(view)).open(); return; }
-    const problem = await plugin.transcription.readiness(engine);
-    if (problem) {
-      if (problem.code === 'localMissing') new ChooseEngineModal(plugin, () => this.start(view)).open();
-      else { new Notice(errorText(problem)); plugin.openSettings(); }
-      return;
-    }
-    if (plugin.reading.isPlaying()) { plugin.reading.pause(); new Notice(t('dictation.readingPaused')); }
-    const editor = view.editor, preview = view.getMode() === 'preview';
-    const value = editor.getValue();
-    const anchor = preview ? value.length : editor.posToOffset(editor.getCursor('to'));
-    const settings = plugin.settings.asr, live = settings.mode === 'live';
-    const session = this.session = {
-      view, file: view.file, engine, anchor, live, state: 'preparing', inserted: 0, failed: [],
-      prefix: preview && value.trim() ? (value.endsWith('\n\n') ? '' : value.endsWith('\n') ? '\n' : '\n\n') : '',
-      abort: new AbortController(), queue: Promise.resolve(), started: Date.now(),
-    };
-    this.mount(session);
-    const win = view.containerEl.ownerDocument.defaultView || window;
-    const segmenter = live ? new PhraseSegmenter({ onPhrase: phrase => this.enqueue(session, phrase), maxSeconds: Math.min(25, plugin.transcription.chunking(engine).maximum) }) : null;
-    session.recorder = new Recorder({ win, keepAudio: settings.keepAudio, onFrame: segmenter ? frame => segmenter.push(frame) : null, onLevel: db => this.level(session, db) });
-    session.segmenter = segmenter;
-    try { await session.recorder.start(); }
-    catch (error) { if (this.session === session) { new Notice(errorText(error), 10000); this.close(); } return; }
-    if (this.session !== session) { void session.recorder.stop(); return; }
-    session.state = 'listening'; session.started = Date.now();
-    session.timer = win.setInterval(() => {
-      if (session.recorder.seconds >= MAX_SECONDS) { new Notice(t('dictation.limit')); void this.finish(); }
+  async start(view, source = 'mic') {
+    if (this.session || this.starting || this.disposed) return;
+    this.starting = true;
+    const generation = this.generation, plugin = this.plugin;
+    try {
+      if (!view?.file || !view.editor) { new Notice(t('notice.noNote')); return; }
+      const engine = plugin.transcription.engine();
+      if (!engine) { new ChooseEngineModal(plugin, () => this.start(view, source)).open(); return; }
+      const problem = await plugin.transcription.readiness(engine);
+      if (generation !== this.generation || this.disposed) return;
+      if (problem) {
+        if (problem.code === 'localMissing') new ChooseEngineModal(plugin, () => this.start(view, source)).open();
+        else { new Notice(errorText(problem)); plugin.openSettings(); }
+        return;
+      }
+      if (plugin.reading.isPlaying()) { plugin.reading.pause(); new Notice(t('dictation.readingPaused')); }
+      const editor = view.editor, preview = view.getMode() === 'preview';
+      const value = editor.getValue();
+      const anchor = preview ? value.length : editor.posToOffset(editor.getCursor('to'));
+      const settings = plugin.settings.asr, live = settings.mode === 'live';
+      const session = this.session = {
+        view, file: view.file, engine, source, anchor, live, state: 'preparing', inserted: 0, failed: [],
+        prefix: preview && value.trim() ? (value.endsWith('\n\n') ? '' : value.endsWith('\n') ? '\n' : '\n\n') : '',
+        abort: new AbortController(), queue: Promise.resolve(), started: Date.now(),
+      };
+      this.mount(session);
+      const win = view.containerEl.ownerDocument.defaultView || window;
+      const segmenter = live ? new PhraseSegmenter({ onPhrase: phrase => this.enqueue(session, phrase), maxSeconds: Math.min(25, plugin.transcription.chunking(engine).maximum) }) : null;
+      const recording = { win, keepAudio: settings.keepAudio, onFrame: segmenter ? frame => segmenter.push(frame) : null, onLevel: db => this.level(session, db),
+        onError: error => { if (this.session === session) { new Notice(errorText(error), 10000); void this.finish(); } } };
+      try { session.recorder = source === 'system' ? plugin.apple().recorder(recording) : new Recorder(recording); }
+      catch (error) { new Notice(errorText(error), 10000); this.close(); plugin.openSettings('asr'); return; }
+      session.segmenter = segmenter;
+      try { await session.recorder.start(); }
+      catch (error) { if (this.session === session) { new Notice(errorText(error), 10000); this.close(); } return; }
+      if (this.session !== session) { void session.recorder.stop(); return; }
+      session.state = 'listening'; session.started = Date.now();
+      session.timer = win.setInterval(() => {
+        if (session.recorder.seconds >= MAX_SECONDS) { new Notice(t('dictation.limit')); void this.finish(); }
+        this.render();
+      }, 250);
       this.render();
-    }, 250);
-    this.render();
+    } finally { this.starting = false; }
   }
   enqueue(session, phrase) {
     session.queue = session.queue.then(async () => {
@@ -103,8 +110,9 @@ export class DictationManager {
       session.state = 'error'; session.error = error; this.render();
     }
   }
-  cancel() { if (this.session) this.close(); }
+  cancel() { this.close(); }
   close() {
+    this.generation++;
     const session = this.session; if (!session) return;
     this.session = null;
     session.abort.abort(); window.clearInterval(session.timer);
@@ -116,7 +124,7 @@ export class DictationManager {
   }
   // Text goes where the cursor was when dictation started, after anything already dictated.
   insert(session, text) {
-    if (!text) return;
+    if (!text || this.session !== session || session.abort.signal.aborted) return;
     const { view } = session;
     if (view.file !== session.file || !view.containerEl.isConnected) {
       const prefixText = session.prefix; session.prefix = '';
@@ -164,7 +172,7 @@ export class DictationManager {
     view.contentEl.addClass('qaudio-has-dictation');
     const bar = session.bar = view.contentEl.createDiv({ cls: 'qaudio-bar qaudio-dictation' });
     const labelId = `qaudio-dictation-${Date.now().toString(36)}`;
-    bar.createSpan({ cls: 'qaudio-sr', text: t('dictation.label'), attr: { id: labelId } });
+    bar.createSpan({ cls: 'qaudio-sr', text: t(session.source === 'system' ? 'dictation.systemLabel' : 'dictation.label'), attr: { id: labelId } });
     bar.setAttr('role', 'region'); bar.setAttr('aria-labelledby', labelId);
     const row = bar.createDiv('qaudio-bar-row');
     const ui = session.ui = {};
@@ -189,12 +197,12 @@ export class DictationManager {
   render() {
     const session = this.session;
     this.status.toggleClass('qaudio-hidden', !session || !Platform.isDesktopApp);
-    if (session) this.status.setText(`● ${t('dictation.label')} ${formatDuration(session.recorder?.seconds || 0)}`);
+    if (session) this.status.setText(`● ${t(session.source === 'system' ? 'dictation.systemLabel' : 'dictation.label')} ${formatDuration(session.recorder?.seconds || 0)}`);
     if (!session?.ui) return;
     const ui = session.ui, state = session.state;
     ui.timer.setText(formatDuration(session.recorder?.seconds || 0));
     session.bar.toggleClass('is-listening', state === 'listening');
-    ui.text.setText(state === 'preparing' ? t('dictation.preparing') : state === 'listening' ? (session.pending ? t('dictation.transcribing') : t('dictation.listening'))
+    ui.text.setText(state === 'preparing' ? t('dictation.preparing') : state === 'listening' ? (session.pending ? t('dictation.transcribing') : t(session.source === 'system' ? 'dictation.systemListening' : 'dictation.listening'))
       : state === 'transcribing' ? (session.progress ? t('dictation.progress', session.progress) : t('dictation.transcribing')) : '');
     ui.finish.toggleClass('qaudio-hidden', state !== 'listening');
     ui.message.empty(); ui.message.toggleClass('qaudio-hidden', state !== 'error');
@@ -206,5 +214,5 @@ export class DictationManager {
       iconButton(actions, 'settings', t('player.openSettings'), () => this.plugin.openSettings(), { text: true });
     }
   }
-  dispose() { this.close(); }
+  dispose() { this.disposed = true; this.close(); }
 }

@@ -1,5 +1,6 @@
 // Console links are independent of API endpoints; opening help never sends credentials.
 export const CLOUD_SERVICES = Object.freeze({
+  ming: { keyHelp: 'https://chat.ant-ling.com/platform/api', asrDocs: 'https://developer.ant-ling.com/en/docs/tutorials/multimodal-understanding/' },
   openai: { keyHelp: 'https://platform.openai.com/api-keys', ttsDocs: 'https://developers.openai.com/api/docs/guides/text-to-speech', asrDocs: 'https://developers.openai.com/api/docs/guides/speech-to-text' },
   qwen: { keyHelp: 'https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key', ttsDocs: 'https://help.aliyun.com/zh/model-studio/qwen-tts' },
   doubao: { keyHelp: 'https://console.volcengine.com/speech/service', ttsDocs: 'https://www.volcengine.com/docs/6561/1598757', asrDocs: 'https://www.volcengine.com/docs/6561/1631584' },

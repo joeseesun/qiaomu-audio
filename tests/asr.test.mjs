@@ -11,7 +11,7 @@ const decode = body => new TextDecoder().decode(new Uint8Array(body));
 
 test('every provider maps to a known protocol and has a usable default', () => {
   for (const p of ASR_PROVIDERS) {
-    assert.ok(['openai-transcriptions', 'chat-audio', 'doubao-flash'].includes(p.protocol), p.id);
+    assert.ok(['openai-transcriptions', 'chat-audio', 'doubao-flash', 'ming-audio'].includes(p.protocol), p.id);
     if (p.id !== 'custom') assert.doesNotThrow(() => cloudConfig(newProfile(p.id)), p.id);
   }
   assert.equal(providerOf('nope').id, 'custom');
@@ -161,4 +161,22 @@ test('live segmenter emits a phrase after a pause and ignores pure silence', () 
   feed(tone(30)); assert.equal(phrases.length, 2);
   assert.ok(phrases[1] <= 25.01);
   seg.flush(); assert.ok(phrases.length >= 2);
+});
+
+// Ming uses audio_url, unlike MiMo's input_audio. Never silently accept a truncated reply.
+test('Ming sends the documented audio_url protocol with verbatim transcription instructions', () => {
+ const cfg = cloudConfig(newProfile('ming'));
+ const request = buildAsrRequest(cfg, 'fixture', wav);
+ const body = JSON.parse(request.body);
+ assert.equal(request.url, 'https://api.ant-ling.com/v1/chat/completions');
+ assert.equal(body.messages[1].content[0].audio_url.url, 'data:audio/wav;base64,UklGRgECAwQ=');
+ assert.equal(body.thinking.type, 'disabled');
+ assert.match(body.messages[0].content, /Never answer questions/);
+ assert.throws(() => parseAsrResponse(cfg, { json: { choices: [{ finish_reason: 'length', message: { content: 'partial' } }] } }), {code:'response'});
+ assert.throws(() => parseAsrResponse(cfg, { json: {} }), {code:'response'});
+ assert.equal(parseAsrResponse(cfg, { json: { choices: [{ finish_reason: 'stop', message: { content: '原话。' } }] } }), '原话。');
+});
+test('Apple recognition selection survives settings reload, but is cleared on mobile', () => {
+ assert.equal(normalizeSettings({asr:{engine:'apple'}}, true).asr.engine, 'apple');
+ assert.equal(normalizeSettings({asr:{engine:'apple'}}, false).asr.engine, '');
 });
